@@ -1821,6 +1821,7 @@ exports.getLeadsStats = async (req, res) => {
                     new: { $sum: { $cond: [{ $eq: ["$status", "new"] }, 1, 0] } },
                     contacted: { $sum: { $cond: [{ $eq: ["$status", "contacted"] }, 1, 0] } },
                     qualified: { $sum: { $cond: [{ $eq: ["$status", "qualified"] }, 1, 0] } },
+                    interested: { $sum: { $cond: [{ $eq: ["$status", "interested"] }, 1, 0] } },
                     converted: { $sum: { $cond: [{ $eq: ["$status", "converted"] }, 1, 0] } },
                     lost: { $sum: { $cond: [{ $eq: ["$status", "lost"] }, 1, 0] } },
 
@@ -1834,7 +1835,7 @@ exports.getLeadsStats = async (req, res) => {
         ]);
 
         const data = stats[0] || {
-            total: 0, new: 0, contacted: 0, qualified: 0,
+            total: 0, new: 0, contacted: 0, qualified: 0, interested: 0,
             converted: 0, lost: 0, hot: 0, warm: 0, cold: 0, assigned: 0
         };
 
