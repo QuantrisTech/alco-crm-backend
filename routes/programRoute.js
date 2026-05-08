@@ -117,22 +117,22 @@ router.put("/batches/:id", protect, authorize("admin", "super_admin"), adminUpda
 router.delete("/batches/:id", protect, authorize("admin", "super_admin"), adminDeleteBatch);
 
 // ── ADMIN — Courses ──
-router.get("/:id/courses", protect, authorize("admin", "super_admin"), adminGetCourses);
+router.get("/:id/courses", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetCourses);
 router.post("/:id/courses", protect, authorize("admin", "super_admin"), adminCreateCourse);
 router.put("/courses/reorder", protect, authorize("admin", "super_admin"), adminReorderCourses);
 router.put("/courses/:id", protect, authorize("admin", "super_admin"), adminUpdateCourse);
 router.delete("/courses/:id", protect, authorize("admin", "super_admin"), adminDeleteCourse);
-router.get("/courses/:id", protect, authorize("admin", "super_admin"), adminGetCourseById);
+router.get("/courses/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetCourseById);
 
 // ── ADMIN — Modules ──
-router.get("/courses/:id/modules", protect, authorize("admin", "super_admin"), adminGetModules);
+router.get("/courses/:id/modules", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetModules);
 router.post("/courses/:id/modules", protect, authorize("admin", "super_admin"), adminCreateModule);
 router.put("/modules/:id", protect, authorize("admin", "super_admin"), adminUpdateModule);
 router.delete("/modules/:id", protect, authorize("admin", "super_admin"), adminDeleteModule);
-router.get("/modules/:id", protect, authorize("admin", "super_admin"), adminGetModuleById);
+router.get("/modules/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetModuleById);
 
 // ── ADMIN — Lessons ──
-router.get("/modules/:id/lessons", protect, authorize("admin", "super_admin"), adminGetLessons);
+router.get("/modules/:id/lessons", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetLessons);
 router.post("/modules/:id/lessons", protect, authorize("admin", "super_admin"), adminCreateLesson);
 router.put("/lessons/:id", protect, authorize("admin", "super_admin"), adminUpdateLesson);
 router.delete("/lessons/:id", protect, authorize("admin", "super_admin"), adminDeleteLesson);
