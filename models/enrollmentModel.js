@@ -99,6 +99,87 @@ const enrollmentSchema = new mongoose.Schema(
       newDueDate: Date,
     },
 
+    // ── Lead snapshot — pura lead data yahan store hoga ──────────
+    // Jab advance pay hone pe lead delete hoti hai toh
+    // yeh saara data enrollment ke saath mahfooz rehta hai
+    leadSnapshot: {
+      // Payment plan
+      paymentPlan: {
+        totalAmount: Number,
+        advanceAmount: Number,
+        advanceDueDate: Date,
+        installments: [
+          {
+            label: String,
+            amount: Number,
+            dueDate: Date,
+            status: { type: String, enum: ["pending", "paid"], default: "pending" },
+          }
+        ],
+        notes: String,
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        createdAt: Date,
+      },
+
+      // Contract details
+      contractDetails: {
+        fullName: String,
+        email: String,
+        phone: String,
+        programName: String,
+        fatherHusbandName: String,
+        cnic: String,
+        bankAccountNumber: String,
+        currentAddress: String,
+        emergencyContactName: String,
+        occupation: String,
+        participationAgreement: Boolean,
+        photoVideoRelease: Boolean,
+        signatureType: String,
+        signatureData: String,
+        status: String,
+        signedAt: Date,
+        submittedAt: Date,
+      },
+
+      // Lead meta
+      source: String,
+      quality: String,
+      opportunity_value: Number,
+      lost_reason: String,
+      notes: String,
+
+      // UTM tracking
+      utm_source: String,
+      utm_medium: String,
+      utm_campaign: String,
+      lead_score: Number,
+
+      // Activities log
+      activities: [
+        {
+          activity_type: String,
+          title: String,
+          description: String,
+          call_duration_minutes: Number,
+          call_outcome: String,
+          email_subject: String,
+          meeting_link: String,
+          meeting_datetime: Date,
+          meeting_location: String,
+          created_by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          createdAt: Date,
+        }
+      ],
+
+      // Assigned sales rep
+      assigned_to: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      created_by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+      // Original lead id (reference rakho delete hone ke baad bhi)
+      lead_id: { type: mongoose.Schema.Types.ObjectId },
+    },
+
     progress: {
       type: Number,
       default: 0,
