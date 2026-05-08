@@ -5,6 +5,7 @@ const Payment = require("../models/paymentModel.js");
 const Enrollment = require("../models/enrollmentModel.js");
 const Lead = require("../models/leadModel.js");
 const logAudit = require("../utils/auditLogger.js");
+const mongoose   = require("mongoose");
 
 // ─────────────────────────────────────────────
 // INVOICE MANAGEMENT
