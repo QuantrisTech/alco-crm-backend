@@ -1142,6 +1142,8 @@ exports.convertLead = async (req, res) => {
         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
         if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
 
+        console.log("Batch ID before conversion:", lead.batch_id); 
+
         if (!lead.paymentPlan) {
             return res.status(400).json({
                 success: false,
