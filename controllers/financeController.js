@@ -583,7 +583,7 @@ exports.markInstallmentPaid = async (req, res) => {
           new Date(inst.dueDate) < new Date()
       );
  
-      const enrollment = await Enrollment.findById(invoice.enrollment).session(session);
+      const enrollment = await Enrollment.findById(invoice.enrollment).populate('batch').session(session);
  
       if (enrollment && enrollment.accessStatus === "RESTRICTED" && !hasOverdue) {
  
