@@ -5,7 +5,7 @@ const Payment = require("../models/paymentModel.js");
 const Enrollment = require("../models/enrollmentModel.js");
 const Lead = require("../models/leadModel.js");
 const logAudit = require("../utils/auditLogger.js");
-const mongoose   = require("mongoose");
+const mongoose = require("mongoose");
 
 // ─────────────────────────────────────────────
 // INVOICE MANAGEMENT
@@ -490,46 +490,46 @@ exports.markInvoicePaid = async (req, res) => {
 exports.markInstallmentPaid = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
- 
+
   try {
     const { invoiceId, installmentId } = req.params;
     const { method, referenceNumber, notes } = req.body;
- 
+
     // ── Validate method ───────────────────────────────────────────
     if (!method) {
       await session.abortTransaction();
       return res.status(400).json({ success: false, message: "Payment method is required" });
     }
- 
+
     if (["bank", "cheque"].includes(method) && !referenceNumber) {
       await session.abortTransaction();
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: "Reference number is required for bank/cheque payments"
-       });
+      });
     }
- 
+
     // ── Find invoice ──────────────────────────────────────────────
     const invoice = await Invoice.findById(invoiceId).session(session);
     if (!invoice)
       return res.status(404).json({ success: false, message: "Invoice not found" });
- 
+
     // ── Find installment ──────────────────────────────────────────
     const installment = invoice.installments.id(installmentId);
     if (!installment)
       return res.status(404).json({ success: false, message: "Installment not found" });
- 
+
     if (installment.status === "PAID")
       return res.status(400).json({ success: false, message: "Already paid" });
- 
+
     const before = invoice.toObject();
- 
+
     // ── Mark installment paid ─────────────────────────────────────
     installment.status = "PAID";
     installment.paidAmount = installment.amount;
     installment.method = method;
     installment.referenceNumber = referenceNumber || null;
- 
+
     // ── Recalculate invoice totals ────────────────────────────────
     const totalPaid = invoice.installments.reduce(
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
@@ -538,11 +538,11 @@ exports.markInstallmentPaid = async (req, res) => {
     invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID"
-      : totalPaid > 0 ? "PARTIAL"
-      : "PENDING";
- 
+        : totalPaid > 0 ? "PARTIAL"
+          : "PENDING";
+
     await invoice.save({ session });
- 
+
     // ── Payment record ────────────────────────────────────────────
     const payment = new Payment({
       invoice: invoice._id,
@@ -558,7 +558,7 @@ exports.markInstallmentPaid = async (req, res) => {
       notes: notes || `Payment for ${installment.label}`,
     });
     await payment.save({ session });
- 
+
     // ── Audit log ─────────────────────────────────────────────────
     await logAudit({
       req,
@@ -568,13 +568,13 @@ exports.markInstallmentPaid = async (req, res) => {
       before,
       after: invoice.toObject(),
     });
- 
+
     let enrollmentActivated = false;
     let leadDeleted = false;
- 
+
     // ── ADVANCE PAID — main logic ─────────────────────────────────
     if (installment.isAdvance) {
- 
+
       // Overdue installments check (future pending = ok)
       const hasOverdue = invoice.installments.some(
         (inst) =>
@@ -582,41 +582,46 @@ exports.markInstallmentPaid = async (req, res) => {
           inst.dueDate &&
           new Date(inst.dueDate) < new Date()
       );
- 
+
       const enrollment = await Enrollment.findById(invoice.enrollment).populate('batch').session(session);
- 
+
       if (enrollment && enrollment.accessStatus === "RESTRICTED" && !hasOverdue) {
- 
+
         // ── 1. Find lead by user_id + program ─────────────────────
-        const lead = await Lead.findOne({
+        // const lead = await Lead.findOne({
+        //   user_id: enrollment.user,
+        //   program_id: enrollment.program,
+        //   status: "converted",
+        // }).session(session);
+        const lead = await Lead.findOneAndUpdate({
           user_id: enrollment.user,
           program_id: enrollment.program,
           status: "converted",
-        }).session(session);
- 
+        }, { advance_paid: true }).session(session);
+
         if (lead) {
           // ── 2. Save full lead snapshot into enrollment ──────────
           enrollment.leadSnapshot = {
-            paymentPlan:     lead.paymentPlan     || null,
+            paymentPlan: lead.paymentPlan || null,
             contractDetails: lead.contractDetails || null,
-            source:          lead.source          || null,
-            quality:         lead.quality         || null,
+            source: lead.source || null,
+            quality: lead.quality || null,
             opportunity_value: lead.opportunity_value || 0,
-            notes:           lead.notes           || null,
-            utm_source:      lead.utm_source      || null,
-            utm_medium:      lead.utm_medium      || null,
-            utm_campaign:    lead.utm_campaign    || null,
-            lead_score:      lead.lead_score      || 0,
-            activities:      lead.activities      || [],
-            assigned_to:     lead.assigned_to     || null,
-            created_by:      lead.created_by      || null,
-            lead_id:         lead._id,
+            notes: lead.notes || null,
+            utm_source: lead.utm_source || null,
+            utm_medium: lead.utm_medium || null,
+            utm_campaign: lead.utm_campaign || null,
+            lead_score: lead.lead_score || 0,
+            activities: lead.activities || [],
+            assigned_to: lead.assigned_to || null,
+            created_by: lead.created_by || null,
+            lead_id: lead._id,
           };
- 
+
           // ── 3. Delete lead ──────────────────────────────────────
           await Lead.findByIdAndDelete(lead._id).session(session);
           leadDeleted = true;
- 
+
           await logAudit({
             req,
             action: "LEAD_DELETED_AFTER_ENROLLMENT",
@@ -626,12 +631,12 @@ exports.markInstallmentPaid = async (req, res) => {
             after: null,
           });
         }
- 
+
         // ── 4. Activate enrollment ──────────────────────────────
         enrollment.accessStatus = "ACTIVE";
         await enrollment.save({ session });
         enrollmentActivated = true;
- 
+
         await logAudit({
           req,
           action: "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
@@ -641,9 +646,9 @@ exports.markInstallmentPaid = async (req, res) => {
         });
       }
     }
- 
+
     await session.commitTransaction();
- 
+
     return res.json({
       success: true,
       message: enrollmentActivated
@@ -653,7 +658,7 @@ exports.markInstallmentPaid = async (req, res) => {
       enrollmentActivated,
       leadDeleted,
     });
- 
+
   } catch (err) {
     await session.abortTransaction();
     console.error("markInstallmentPaid error:", err);

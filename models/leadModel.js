@@ -181,6 +181,11 @@ const leadSchema = new mongoose.Schema(
       ref: "User",
     },
 
+    advance_paid: {
+  type: Boolean,
+  default: false,
+},
+
     lost_reason: String,
     lost_notes: String,
     notes: String,
