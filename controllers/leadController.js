@@ -11,6 +11,7 @@ const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
 const Program = require("../models/programModel.js");
 const Lead = require("../models/leadModel.js");
+const assignLeadManager = require("../utils/assignLeadManager.js");
 // const sendEmail = require("../utils/sendEmail.js");
 
 // CREATE LEAD (public or admin)
@@ -572,10 +573,12 @@ exports.createLead = async (req, res) => {
                     message: "Thank you for your interest! We already have your application and will contact you soon. 😊",
                 });
             }
+            const assignedManager = await assignLeadManager();
 
             const lead = await Lead.create({
                 ...leadData,
                 user_id: existingUser._id,
+                assigned_to: assignedManager,
             });
 
             return res.status(201).json({
@@ -606,6 +609,7 @@ exports.createLead = async (req, res) => {
         const lead = await Lead.create({
             ...leadData,
             user_id: newUser._id,
+            assigned_to: assignedManager,
         });
 
         // ── Step 4: Credentials email bhejo ───────────────────
@@ -706,6 +710,8 @@ exports.createLeadContact = async (req, res) => {
             });
         }
 
+        const assignedManager = await assignLeadManager();
+
         // ── Naya lead banao + user_id lagao ────────────────────
         const lead = await Lead.create({
             first_name: first_name.trim(),
@@ -717,6 +723,7 @@ exports.createLeadContact = async (req, res) => {
             status: "new",
             quality: "cold",
             user_id: userId, // ← ab sahi se set ho raha hai
+            assigned_to: assignedManager,
         });
 
         return res.status(201).json({

@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       default: null,
-       index: true, 
+      index: true,
     },
 
     // email: {
@@ -114,6 +114,16 @@ const userSchema = new mongoose.Schema(
 
     avatarColor: {
       type: String,
+      default: null,
+    },
+
+    isAvailableForLead: {
+      type: Boolean,
+      default: true,
+    },
+
+    lastLeadAssignedAt: {
+      type: Date,
       default: null,
     },
 
