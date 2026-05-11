@@ -138,8 +138,8 @@ router.put("/lessons/:id", protect, authorize("admin", "super_admin"), adminUpda
 router.delete("/lessons/:id", protect, authorize("admin", "super_admin"), adminDeleteLesson);
 
 // ── LAST ADMIN — Programs ──
-router.get("/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetProgramById);
-router.put("/:id", protect, authorize("admin", "super_admin"), adminUpdateProgram);
+router.get("/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetProgramById);
+router.put("/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminUpdateProgram);
 router.delete("/:id", protect, authorize("admin", "super_admin"), adminDeleteProgram);
 
 module.exports = router;
