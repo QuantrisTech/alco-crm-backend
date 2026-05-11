@@ -1378,14 +1378,14 @@ exports.convertLead = async (req, res) => {
     try {
         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
         if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
- 
+
         if (!lead.paymentPlan) {
             return res.status(400).json({
                 success: false,
                 message: "Please set a payment plan before converting.",
             });
         }
- 
+
         // ── ✅ FIX: batch_id aur program_id req.body se set karo ──
         // Frontend batch modal se batch_id bhejta hai
         if (req.body.batch_id) {
@@ -1394,38 +1394,40 @@ exports.convertLead = async (req, res) => {
         if (req.body.program_id) {
             lead.program_id = req.body.program_id;
         }
- 
+
         // ── Step 1: Program fetch ─────────────────────────────────
         const program = await Program.findById(lead.program_id).select("name");
- 
+
         // ── Step 2: Lead convert + save (batch_id bhi save hoga) ──
         lead.status = "converted";
         await lead.save(); // ← ab batch_id null nahi rahega
- 
+
         console.log("Lead saved with batch_id:", lead.batch_id); // debug
- 
+
         // ── Step 3: User banao ────────────────────────────────────
         const crypto = require("crypto");
         const tempPassword = crypto.randomBytes(8).toString("hex");
         let user = await User.findOne({ email: lead.email });
         let isNewUser = false;
- 
+
         if (!user) {
             isNewUser = true;
             user = await User.create({
                 name: `${lead.first_name} ${lead.last_name}`,
                 email: lead.email,
                 phone: lead.phone,
+                cnic: lead.contractDetails?.cnic || "",
+                address: lead.contractDetails?.currentAddress || "",
                 role: "student",
                 password: tempPassword,
             });
         }
- 
+
         // ── ✅ Step 3.5: lead.user_id update karo ─────────────────
         // markInstallmentPaid mein lead dhundne ke liye zaroor hai
         lead.user_id = user._id;
         await lead.save();
- 
+
         // ── Step 4: Enrollment banao ──────────────────────────────
         const enrollment = await Enrollment.create({
             user: user._id,
@@ -1434,14 +1436,14 @@ exports.convertLead = async (req, res) => {
             status: "active",
             accessStatus: "RESTRICTED",
         });
- 
+
         // ── Step 5: Invoice Number ────────────────────────────────
         const count = await Invoice.countDocuments();
         const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
- 
+
         // ── Step 6: Invoice banao ─────────────────────────────────
         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
- 
+
         const allInstallments = [
             {
                 label: "Advance Payment",
@@ -1460,7 +1462,7 @@ exports.convertLead = async (req, res) => {
                 isAdvance: false,
             })),
         ];
- 
+
         const invoice = await Invoice.create({
             invoiceNumber,
             user: user._id,
@@ -1473,20 +1475,20 @@ exports.convertLead = async (req, res) => {
             notes: lead.paymentPlan.notes || "",
             status: "PENDING",
         });
- 
+
         // ── Step 7: Enrollment pe invoice link ───────────────────
         await Enrollment.findByIdAndUpdate(enrollment._id, {
             invoice: invoice._id,
         });
- 
+
         // ── Step 8: Email helpers ─────────────────────────────────
         const formatDate = (d) =>
             d ? new Date(d).toLocaleDateString("en-PK", {
                 day: "2-digit", month: "short", year: "numeric",
             }) : "—";
- 
+
         const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
- 
+
         // ── Step 9: Installment rows HTML ─────────────────────────
         const installmentRows = invoice.installments.map((inst, i) => {
             const isAdv = inst.isAdvance;
@@ -1514,7 +1516,7 @@ exports.convertLead = async (req, res) => {
         </td>
       </tr>`;
         }).join("");
- 
+
         // ── Step 10: Invoice Email ────────────────────────────────
         try {
             await sendEmailDynamic({
@@ -1545,7 +1547,7 @@ exports.convertLead = async (req, res) => {
         } catch (emailErr) {
             console.error("Invoice email failed:", emailErr.message);
         }
- 
+
         // ── Step 11: Credentials Email (new user only) ────────────
         if (isNewUser) {
             try {
@@ -1563,7 +1565,7 @@ exports.convertLead = async (req, res) => {
                 console.error("Credentials email failed:", credErr.message);
             }
         }
- 
+
         // ── Step 12: Audit Log ────────────────────────────────────
         await logAudit({
             req,
@@ -1577,7 +1579,7 @@ exports.convertLead = async (req, res) => {
                 batch_id: lead.batch_id,   // ← audit mein bhi track karo
             },
         });
- 
+
         res.status(201).json({
             success: true,
             message: "Lead converted — invoice and credentials emailed",

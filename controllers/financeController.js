@@ -59,7 +59,7 @@ exports.getAllInvoices = async (req, res) => {
 
     const invoices = await Invoice.find(filter)
       .populate("user", "name email phone")
-      .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
+      .populate({ path: "enrollment", populate: [{ path: "program", select: "name short_description" }, { path: "batch", select: "startDate name" }] })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -1373,7 +1373,10 @@ exports.getMyInvoices = async (req, res) => {
     const invoices = await Invoice.find({ user: req.user.id })
       .populate({
         path: "enrollment",
-        populate: { path: "program", select: "name" },
+        populate: [
+          { path: "program", select: "name short_description" },
+          { path: "batch", select: "startDate name" }
+        ]
       })
       .sort({ createdAt: -1 });
 
