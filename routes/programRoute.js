@@ -106,23 +106,23 @@ router.get("/public/:slug/batches", getProgramBatches);
 router.get("/name", getProgramsPublic);
 
 // ── FIRST ADMIN — Programs ──
-router.get("/", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetPrograms);
+router.get("/", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetPrograms);
 router.post("/", protect, authorize("admin", "super_admin"), adminCreateProgram);
 router.post("/:id/duplicate", protect, authorize("admin", "super_admin"), adminDuplicateProgram);
 
 // ── ADMIN — Batches ──
-router.get("/batches", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetBatches);
+router.get("/batches", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetBatches);
 router.post("/batches", protect, authorize("admin", "super_admin"), adminCreateBatch);
 router.put("/batches/:id", protect, authorize("admin", "super_admin"), adminUpdateBatch);
 router.delete("/batches/:id", protect, authorize("admin", "super_admin"), adminDeleteBatch);
 
 // ── ADMIN — Courses ──
-router.get("/:id/courses", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetCourses);
+router.get("/:id/courses", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetCourses);
 router.post("/:id/courses", protect, authorize("admin", "super_admin"), adminCreateCourse);
 router.put("/courses/reorder", protect, authorize("admin", "super_admin"), adminReorderCourses);
-router.put("/courses/:id", protect, authorize("admin", "super_admin"), adminUpdateCourse);
+router.put("/courses/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminUpdateCourse);
 router.delete("/courses/:id", protect, authorize("admin", "super_admin"), adminDeleteCourse);
-router.get("/courses/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetCourseById);
+router.get("/courses/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetCourseById);
 
 // ── ADMIN — Modules ──
 router.get("/courses/:id/modules", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), adminGetModules);
