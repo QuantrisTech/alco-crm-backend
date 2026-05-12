@@ -3,43 +3,6 @@ const Enrollment = require("../models/enrollmentModel.js");
 
 
 // CREATE ENROLLMENT (Improved)
-// exports.createEnrollment = async (req, res) => {
-//   try {
-//     const { user, program, batch } = req.body;
-
-//     if (!user || !program) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "User and Program are required",
-//       });
-//     }
-
-//     const existing = await Enrollment.findOne({ user, program });
-
-//     if (existing) {
-//       return res.status(409).json({
-//         success: false,
-//         message: "User already enrolled in this program",
-//       });
-//     }
-
-//     const enrollment = await Enrollment.create({
-//       user,
-//       program,
-//       batch,
-//     });
-
-//     res.status(201).json({
-//       success: true,
-//       data: enrollment,
-//     });
-//   } catch (err) {
-//     res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
 exports.createEnrollment = async (req, res) => {
   try {
     const { user, program, batch, paymentPlan } = req.body; // Include paymentPlan
@@ -79,7 +42,6 @@ exports.createEnrollment = async (req, res) => {
     });
   }
 };
-
 
 // MY ENROLLMENTS
 exports.getMyEnrollments = async (req, res) => {

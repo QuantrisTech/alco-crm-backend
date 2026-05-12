@@ -76,19 +76,6 @@ exports.getLearningDashboard = async (req, res) => {
       status: "active",
     }).sort({ order: 1 });
 
-    // Har course ka progress calculate karo
-    // const coursesWithProgress = await Promise.all(
-    //   courses.map(async (course) => {
-    //     const totalLessons = course.total_lessons || 0;
-    //     const completedLessons = await LessonProgress.countDocuments({
-    //       enrollment_id: enrollment._id,
-    //       course_id: course._id,
-    //       is_completed: true,
-    //     });
-    //     const progressPct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-    //     return { ...course.toObject(), completed_lessons: completedLessons, progress_percentage: progressPct };
-    //   })
-    // );
     const coursesWithProgress = await Promise.all(
       courses.map(async (course) => {
         const totalLessons = course.total_lessons || 0;
