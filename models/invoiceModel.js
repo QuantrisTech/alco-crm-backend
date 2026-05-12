@@ -11,6 +11,8 @@ const invoiceSchema = new mongoose.Schema(
     paidAmount: { type: Number, default: 0 },
     remainingAmount: Number,
 
+    description: { type: String, default: "" },
+
     status: {
       type: String,
       enum: [

@@ -10,6 +10,7 @@ const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
 const Program = require("../models/programModel.js");
 const Lead = require("../models/leadModel.js");
+const Batch = require("../models/batchModel");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 
 // --------------------24/4/2026--------------------
@@ -319,6 +320,7 @@ exports.createLead = async (req, res) => {
     }
 };
 
+
 // ─── createLeadContact (contact form se) ─────────────────────
 exports.createLeadContact = async (req, res) => {
     try {
@@ -616,6 +618,240 @@ exports.assignLead = async (req, res) => {
 };
 
 // CONVERT LEAD STATUS
+// exports.convertLead = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
+//         if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+
+//         if (!lead.paymentPlan) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Please set a payment plan before converting.",
+//             });
+//         }
+
+//         // ── ✅ FIX: batch_id aur program_id req.body se set karo ──
+//         // Frontend batch modal se batch_id bhejta hai
+//         if (req.body.batch_id) {
+//             lead.batch_id = req.body.batch_id;
+//         }
+//         if (req.body.program_id) {
+//             lead.program_id = req.body.program_id;
+//         }
+
+//         // ── Step 1: Program fetch ─────────────────────────────────
+//         const program = await Program.findById(lead.program_id).select("name");
+
+//         // ── Step 2: Lead convert + save (batch_id bhi save hoga) ──
+//         lead.status = "converted";
+//         await lead.save(); // ← ab batch_id null nahi rahega
+
+//         console.log("Lead saved with batch_id:", lead.batch_id); // debug
+
+//         // ── Step 3: User banao ────────────────────────────────────
+//         const crypto = require("crypto");
+//         const tempPassword = crypto.randomBytes(8).toString("hex");
+//         let user = await User.findOne({ email: lead.email });
+//         let isNewUser = false;
+
+//         if (!user) {
+//             isNewUser = true;
+//             user = await User.create({
+//                 name: `${lead.first_name} ${lead.last_name}`,
+//                 email: lead.email,
+//                 phone: lead.phone,
+//                 cnic: lead.contractDetails?.cnic || "",
+//                 address: lead.contractDetails?.currentAddress || "",
+//                 role: "student",
+//                 password: tempPassword,
+//             });
+//         }
+
+//         // ── ✅ Step 3.5: lead.user_id update karo ─────────────────
+//         // markInstallmentPaid mein lead dhundne ke liye zaroor hai
+//         lead.user_id = user._id;
+//         await lead.save();
+
+//         // ── Step 4: Enrollment banao ──────────────────────────────
+//         const enrollment = await Enrollment.create({
+//             user: user._id,
+//             program: lead.program_id,
+//             batch: lead.batch_id,   // ← ab sahi value aayegi
+//             status: "active",
+//             accessStatus: "RESTRICTED",
+//         });
+
+//         // ── Step 5: Invoice Number ────────────────────────────────
+//         const count = await Invoice.countDocuments();
+//         const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+//         // ── Step 6: Invoice banao ─────────────────────────────────
+//         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
+
+//         const allInstallments = [
+//             {
+//                 label: "Advance Payment",
+//                 amount: advanceAmount,
+//                 dueDate: advanceDueDate,
+//                 status: "PENDING",
+//                 paidAmount: 0,
+//                 isAdvance: true,
+//             },
+//             ...(installments || []).map((inst) => ({
+//                 label: inst.label || "Installment",
+//                 amount: inst.amount,
+//                 dueDate: inst.dueDate,
+//                 status: "PENDING",
+//                 paidAmount: 0,
+//                 isAdvance: false,
+//             })),
+//         ];
+
+//         const invoice = await Invoice.create({
+//             invoiceNumber,
+//             user: user._id,
+//             enrollment: enrollment._id,
+//             totalAmount,
+//             remainingAmount: totalAmount,
+//             paidAmount: 0,
+//             dueDate: advanceDueDate,
+//             installments: allInstallments,
+//             notes: lead.paymentPlan.notes || "",
+//             status: "PENDING",
+//         });
+
+//         // ── Step 7: Enrollment pe invoice link ───────────────────
+//         await Enrollment.findByIdAndUpdate(enrollment._id, {
+//             invoice: invoice._id,
+//         });
+
+//         // ── Step 8: Email helpers ─────────────────────────────────
+//         const formatDate = (d) =>
+//             d ? new Date(d).toLocaleDateString("en-PK", {
+//                 day: "2-digit", month: "short", year: "numeric",
+//             }) : "—";
+
+//         const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
+
+//         // ── Step 9: Installment rows HTML ─────────────────────────
+//         const installmentRows = invoice.installments.map((inst, i) => {
+//             const isAdv = inst.isAdvance;
+//             const isPaid = inst.status === "PAID";
+//             return `
+//       <tr style="background:${isAdv ? "#fdf6e3" : "#ffffff"}; border-bottom:1px solid #dde2ec;">
+//         <td style="padding:13px 16px; font-family:'Courier New',monospace; font-size:11px; font-weight:600; color:#8a92a6; width:40px;">
+//           ${String(i + 1).padStart(2, "0")}
+//         </td>
+//         <td style="padding:13px 16px; font-size:13px; color:#0f1117;">
+//           <span style="font-weight:700;">${isAdv ? "Advance Payment" : inst.label || `Installment ${i + 1}`}</span>
+//           ${isAdv ? `<span style="display:inline-block; background:#c8a84b; color:#5a3a00; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:2px 8px; border-radius:4px; margin-left:7px;">Advance</span>` : ""}
+//         </td>
+//         <td style="padding:13px 16px; font-family:'Courier New',monospace; font-size:11.5px; color:#4a5060;">
+//           ${formatDate(inst.dueDate)}
+//         </td>
+//         <td style="padding:13px 16px;">
+//           <span style="display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:5px;
+//             background:${isPaid ? "#eafaf3" : "#fff8e8"}; color:${isPaid ? "#1a8a57" : "#b07800"};">
+//             ${inst.status}
+//           </span>
+//         </td>
+//         <td style="padding:13px 16px; text-align:right; font-family:'Courier New',monospace; font-weight:600; font-size:13px; color:#0f1117;">
+//           Rs ${formatAmount(inst.amount)}
+//         </td>
+//       </tr>`;
+//         }).join("");
+
+//         // ── Step 10: Invoice Email ────────────────────────────────
+//         try {
+//             await sendEmailDynamic({
+//                 to: user.email,
+//                 subject: `Your Enrollment Invoice ${invoice.invoiceNumber} | ALCO`,
+//                 templateName: "generate-invoice",
+//                 replacements: {
+//                     invoiceNumber: invoice.invoiceNumber,
+//                     invoiceStatus: invoice.status,
+//                     issueDate: formatDate(new Date()),
+//                     advanceDueDate: formatDate(invoice.dueDate),
+//                     enrollmentId: enrollment._id.toString().slice(0, 8) + "..." + enrollment._id.toString().slice(-4),
+//                     studentName: user.name,
+//                     studentEmail: user.email,
+//                     studentPhone: user.phone || "—",
+//                     studentProfession: lead.profession || "—",
+//                     salesManagerName: lead.assigned_to?.name || "Sales Team",
+//                     salesManagerEmail: lead.assigned_to?.email || "sales@alco.com",
+//                     programName: program?.name || "NLP Program",
+//                     planNotes: lead.paymentPlan.notes || "",
+//                     installmentRows,
+//                     totalAmount: formatAmount(invoice.totalAmount),
+//                     paidAmount: formatAmount(invoice.paidAmount || 0),
+//                     remainingAmount: formatAmount(invoice.remainingAmount || invoice.totalAmount),
+//                     advanceAmount: formatAmount(invoice.installments.find((i) => i.isAdvance)?.amount || 0),
+//                 },
+//             });
+//         } catch (emailErr) {
+//             console.error("Invoice email failed:", emailErr.message);
+//         }
+
+//         // ── Step 11: Credentials Email (new user only) ────────────
+//         if (isNewUser) {
+//             try {
+//                 await sendEmailDynamic({
+//                     to: user.email,
+//                     subject: "Your Login Credentials | ALCO",
+//                     templateName: "send-user-credentials",
+//                     replacements: {
+//                         userName: user.name,
+//                         userEmail: user.email,
+//                         password: tempPassword,
+//                     },
+//                 });
+//             } catch (credErr) {
+//                 console.error("Credentials email failed:", credErr.message);
+//             }
+//         }
+
+//         // ── Step 12: Audit Log ────────────────────────────────────
+//         await logAudit({
+//             req,
+//             action: "LEAD_CONVERTED",
+//             module: "leads",
+//             targetId: lead._id,
+//             after: {
+//                 enrollment: enrollment._id,
+//                 invoice: invoice._id,
+//                 user: user._id,
+//                 batch_id: lead.batch_id,   // ← audit mein bhi track karo
+//             },
+//         });
+
+//         res.status(201).json({
+//             success: true,
+//             message: "Lead converted — invoice and credentials emailed",
+//             data: {
+//                 user: { _id: user._id, name: user.name, email: user.email, isNewUser },
+//                 enrollment: {
+//                     _id: enrollment._id,
+//                     accessStatus: "RESTRICTED",
+//                     batch: lead.batch_id,   // ← response mein bhi dikh jaye
+//                 },
+//                 invoice: {
+//                     _id: invoice._id,
+//                     invoiceNumber,
+//                     totalAmount,
+//                     status: "PENDING",
+//                 },
+//                 lead: {
+//                     _id: lead._id,
+//                     batch_id: lead.batch_id,     // ← confirm ke liye
+//                     user_id: lead.user_id,
+//                 },
+//             },
+//         });
+//     } catch (err) {
+//         console.error("convertLead error:", err.message);
+//         res.status(500).json({ success: false, message: err.message });
+//     }
+// };
 exports.convertLead = async (req, res) => {
     try {
         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
@@ -628,23 +864,19 @@ exports.convertLead = async (req, res) => {
             });
         }
 
-        // ── ✅ FIX: batch_id aur program_id req.body se set karo ──
-        // Frontend batch modal se batch_id bhejta hai
-        if (req.body.batch_id) {
-            lead.batch_id = req.body.batch_id;
-        }
-        if (req.body.program_id) {
-            lead.program_id = req.body.program_id;
-        }
+        // ── batch_id aur program_id req.body se set karo ──────────
+        if (req.body.batch_id)  lead.batch_id  = req.body.batch_id;
+        if (req.body.program_id) lead.program_id = req.body.program_id;
 
-        // ── Step 1: Program fetch ─────────────────────────────────
-        const program = await Program.findById(lead.program_id).select("name");
+        // ── Step 1: Program + Batch fetch ─────────────────────────
+        const program  = await Program.findById(lead.program_id).select("name");
+        const batchDoc = lead.batch_id
+            ? await Batch.findById(lead.batch_id).select("name start_date end_date")
+            : null;
 
-        // ── Step 2: Lead convert + save (batch_id bhi save hoga) ──
+        // ── Step 2: Lead convert + save ───────────────────────────
         lead.status = "converted";
-        await lead.save(); // ← ab batch_id null nahi rahega
-
-        console.log("Lead saved with batch_id:", lead.batch_id); // debug
+        await lead.save();
 
         // ── Step 3: User banao ────────────────────────────────────
         const crypto = require("crypto");
@@ -655,32 +887,31 @@ exports.convertLead = async (req, res) => {
         if (!user) {
             isNewUser = true;
             user = await User.create({
-                name: `${lead.first_name} ${lead.last_name}`,
-                email: lead.email,
-                phone: lead.phone,
-                cnic: lead.contractDetails?.cnic || "",
-                address: lead.contractDetails?.currentAddress || "",
-                role: "student",
+                name:     `${lead.first_name} ${lead.last_name}`,
+                email:    lead.email,
+                phone:    lead.phone,
+                cnic:     lead.contractDetails?.cnic            || "",
+                address:  lead.contractDetails?.currentAddress  || "",
+                role:     "student",
                 password: tempPassword,
             });
         }
 
-        // ── ✅ Step 3.5: lead.user_id update karo ─────────────────
-        // markInstallmentPaid mein lead dhundne ke liye zaroor hai
+        // ── Step 3.5: lead.user_id update karo ───────────────────
         lead.user_id = user._id;
         await lead.save();
 
         // ── Step 4: Enrollment banao ──────────────────────────────
         const enrollment = await Enrollment.create({
-            user: user._id,
-            program: lead.program_id,
-            batch: lead.batch_id,   // ← ab sahi value aayegi
-            status: "active",
+            user:         user._id,
+            program:      lead.program_id,
+            batch:        lead.batch_id,
+            status:       "active",
             accessStatus: "RESTRICTED",
         });
 
         // ── Step 5: Invoice Number ────────────────────────────────
-        const count = await Invoice.countDocuments();
+        const count         = await Invoice.countDocuments();
         const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
 
         // ── Step 6: Invoice banao ─────────────────────────────────
@@ -688,40 +919,38 @@ exports.convertLead = async (req, res) => {
 
         const allInstallments = [
             {
-                label: "Advance Payment",
-                amount: advanceAmount,
-                dueDate: advanceDueDate,
-                status: "PENDING",
-                paidAmount: 0,
-                isAdvance: true,
+                label:       "Advance Payment",
+                amount:      advanceAmount,
+                dueDate:     advanceDueDate,
+                status:      "PENDING",
+                paidAmount:  0,
+                isAdvance:   true,
             },
             ...(installments || []).map((inst) => ({
-                label: inst.label || "Installment",
-                amount: inst.amount,
-                dueDate: inst.dueDate,
-                status: "PENDING",
+                label:      inst.label || "Installment",
+                amount:     inst.amount,
+                dueDate:    inst.dueDate,
+                status:     "PENDING",
                 paidAmount: 0,
-                isAdvance: false,
+                isAdvance:  false,
             })),
         ];
 
         const invoice = await Invoice.create({
             invoiceNumber,
-            user: user._id,
-            enrollment: enrollment._id,
+            user:            user._id,
+            enrollment:      enrollment._id,
             totalAmount,
             remainingAmount: totalAmount,
-            paidAmount: 0,
-            dueDate: advanceDueDate,
-            installments: allInstallments,
-            notes: lead.paymentPlan.notes || "",
-            status: "PENDING",
+            paidAmount:      0,
+            dueDate:         advanceDueDate,
+            installments:    allInstallments,
+            notes:           lead.paymentPlan.notes || "",
+            status:          "PENDING",
         });
 
         // ── Step 7: Enrollment pe invoice link ───────────────────
-        await Enrollment.findByIdAndUpdate(enrollment._id, {
-            invoice: invoice._id,
-        });
+        await Enrollment.findByIdAndUpdate(enrollment._id, { invoice: invoice._id });
 
         // ── Step 8: Email helpers ─────────────────────────────────
         const formatDate = (d) =>
@@ -731,29 +960,32 @@ exports.convertLead = async (req, res) => {
 
         const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
 
-        // ── Step 9: Installment rows HTML ─────────────────────────
+        // ── Step 9: Installment rows HTML (qty column added) ──────
         const installmentRows = invoice.installments.map((inst, i) => {
-            const isAdv = inst.isAdvance;
+            const isAdv  = inst.isAdvance;
             const isPaid = inst.status === "PAID";
             return `
       <tr style="background:${isAdv ? "#fdf6e3" : "#ffffff"}; border-bottom:1px solid #dde2ec;">
-        <td style="padding:13px 16px; font-family:'Courier New',monospace; font-size:11px; font-weight:600; color:#8a92a6; width:40px;">
+        <td style="padding:13px 14px; font-family:'Courier New',monospace; font-size:11px; font-weight:600; color:#8a92a6; width:36px;">
           ${String(i + 1).padStart(2, "0")}
         </td>
-        <td style="padding:13px 16px; font-size:13px; color:#0f1117;">
+        <td style="padding:13px 14px; font-size:13px; color:#0f1117;">
           <span style="font-weight:700;">${isAdv ? "Advance Payment" : inst.label || `Installment ${i + 1}`}</span>
           ${isAdv ? `<span style="display:inline-block; background:#c8a84b; color:#5a3a00; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:2px 8px; border-radius:4px; margin-left:7px;">Advance</span>` : ""}
         </td>
-        <td style="padding:13px 16px; font-family:'Courier New',monospace; font-size:11.5px; color:#4a5060;">
+        <td style="padding:13px 14px; text-align:center; font-family:'Courier New',monospace; font-size:12px; color:#4a5060; width:50px;">
+          1
+        </td>
+        <td style="padding:13px 14px; font-family:'Courier New',monospace; font-size:11.5px; color:#4a5060;">
           ${formatDate(inst.dueDate)}
         </td>
-        <td style="padding:13px 16px;">
+        <td style="padding:13px 14px;">
           <span style="display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:5px;
             background:${isPaid ? "#eafaf3" : "#fff8e8"}; color:${isPaid ? "#1a8a57" : "#b07800"};">
             ${inst.status}
           </span>
         </td>
-        <td style="padding:13px 16px; text-align:right; font-family:'Courier New',monospace; font-weight:600; font-size:13px; color:#0f1117;">
+        <td style="padding:13px 14px; text-align:right; font-family:'Courier New',monospace; font-weight:600; font-size:13px; color:#0f1117;">
           Rs ${formatAmount(inst.amount)}
         </td>
       </tr>`;
@@ -762,28 +994,51 @@ exports.convertLead = async (req, res) => {
         // ── Step 10: Invoice Email ────────────────────────────────
         try {
             await sendEmailDynamic({
-                to: user.email,
-                subject: `Your Enrollment Invoice ${invoice.invoiceNumber} | ALCO`,
+                to:           user.email,
+                subject:      `Your Enrollment Invoice ${invoice.invoiceNumber} | ALCO`,
                 templateName: "generate-invoice",
                 replacements: {
-                    invoiceNumber: invoice.invoiceNumber,
-                    invoiceStatus: invoice.status,
-                    issueDate: formatDate(new Date()),
+                    // ── Invoice meta ──────────────────────────────
+                    invoiceNumber:  invoice.invoiceNumber,
+                    invoiceStatus:  invoice.status,
+                    issueDate:      formatDate(new Date()),
                     advanceDueDate: formatDate(invoice.dueDate),
-                    enrollmentId: enrollment._id.toString().slice(0, 8) + "..." + enrollment._id.toString().slice(-4),
-                    studentName: user.name,
-                    studentEmail: user.email,
-                    studentPhone: user.phone || "—",
-                    studentProfession: lead.profession || "—",
-                    salesManagerName: lead.assigned_to?.name || "Sales Team",
+                    enrollmentId:   enrollment._id.toString().slice(0, 8) + "..." + enrollment._id.toString().slice(-4),
+
+                    // ── Batch ─────────────────────────────────────
+                    batchName:      batchDoc?.name                  || "—",
+                    batchStartDate: formatDate(batchDoc?.start_date) || "—",
+                    batchEndDate:   formatDate(batchDoc?.end_date)   || "—",
+
+                    // ── Student ───────────────────────────────────
+                    studentName:       user.name,
+                    studentEmail:      user.email,
+                    studentPhone:      user.phone                              || "—",
+                    studentCnic:       lead.contractDetails?.cnic              || "—",
+                    studentAddress:    lead.contractDetails?.currentAddress    || "—",
+                    studentProfession: lead.profession || lead.contractDetails?.occupation || "—",
+
+                    // ── Sales ─────────────────────────────────────
+                    salesManagerName:  lead.assigned_to?.name  || "Sales Team",
                     salesManagerEmail: lead.assigned_to?.email || "sales@alco.com",
+
+                    // ── Program ───────────────────────────────────
                     programName: program?.name || "NLP Program",
-                    planNotes: lead.paymentPlan.notes || "",
+                    planNotesBlock: lead.paymentPlan?.notes
+                        ? `<div style="font-size:12px;color:#4a5060;font-style:italic;padding:10px 14px;
+                             background:#ffffff;border-radius:8px;border-left:3px solid #c8a84b;">
+                             ${lead.paymentPlan.notes}
+                           </div>`
+                        : "",
+
+                    // ── Installments ──────────────────────────────
                     installmentRows,
-                    totalAmount: formatAmount(invoice.totalAmount),
-                    paidAmount: formatAmount(invoice.paidAmount || 0),
+
+                    // ── Totals ────────────────────────────────────
+                    totalAmount:     formatAmount(invoice.totalAmount),
+                    paidAmount:      formatAmount(invoice.paidAmount || 0),
                     remainingAmount: formatAmount(invoice.remainingAmount || invoice.totalAmount),
-                    advanceAmount: formatAmount(invoice.installments.find((i) => i.isAdvance)?.amount || 0),
+                    advanceAmount:   formatAmount(invoice.installments.find((i) => i.isAdvance)?.amount || 0),
                 },
             });
         } catch (emailErr) {
@@ -794,13 +1049,13 @@ exports.convertLead = async (req, res) => {
         if (isNewUser) {
             try {
                 await sendEmailDynamic({
-                    to: user.email,
-                    subject: "Your Login Credentials | ALCO",
+                    to:           user.email,
+                    subject:      "Your Login Credentials | ALCO",
                     templateName: "send-user-credentials",
                     replacements: {
-                        userName: user.name,
+                        userName:  user.name,
                         userEmail: user.email,
-                        password: tempPassword,
+                        password:  tempPassword,
                     },
                 });
             } catch (credErr) {
@@ -811,14 +1066,14 @@ exports.convertLead = async (req, res) => {
         // ── Step 12: Audit Log ────────────────────────────────────
         await logAudit({
             req,
-            action: "LEAD_CONVERTED",
-            module: "leads",
+            action:   "LEAD_CONVERTED",
+            module:   "leads",
             targetId: lead._id,
             after: {
                 enrollment: enrollment._id,
-                invoice: invoice._id,
-                user: user._id,
-                batch_id: lead.batch_id,   // ← audit mein bhi track karo
+                invoice:    invoice._id,
+                user:       user._id,
+                batch_id:   lead.batch_id,
             },
         });
 
@@ -826,25 +1081,31 @@ exports.convertLead = async (req, res) => {
             success: true,
             message: "Lead converted — invoice and credentials emailed",
             data: {
-                user: { _id: user._id, name: user.name, email: user.email, isNewUser },
+                user: {
+                    _id:       user._id,
+                    name:      user.name,
+                    email:     user.email,
+                    isNewUser,
+                },
                 enrollment: {
-                    _id: enrollment._id,
+                    _id:          enrollment._id,
                     accessStatus: "RESTRICTED",
-                    batch: lead.batch_id,   // ← response mein bhi dikh jaye
+                    batch:        lead.batch_id,
                 },
                 invoice: {
-                    _id: invoice._id,
+                    _id:          invoice._id,
                     invoiceNumber,
                     totalAmount,
-                    status: "PENDING",
+                    status:       "PENDING",
                 },
                 lead: {
-                    _id: lead._id,
-                    batch_id: lead.batch_id,     // ← confirm ke liye
-                    user_id: lead.user_id,
+                    _id:      lead._id,
+                    batch_id: lead.batch_id,
+                    user_id:  lead.user_id,
                 },
             },
         });
+
     } catch (err) {
         console.error("convertLead error:", err.message);
         res.status(500).json({ success: false, message: err.message });
