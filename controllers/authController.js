@@ -31,20 +31,25 @@ exports.register = async (req, res) => {
       avatarColor,
     });
 
-    const verificationUrl = `${process.env.BACKEND_BASE_URL}/api/auth/verify-email/${verificationToken}`;
+    // ✅ Email fail ho toh bhi registration complete ho
+    try {
+      const verificationUrl = `${process.env.BACKEND_BASE_URL}/api/auth/verify-email/${verificationToken}`;
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your email ✅",
+        templateName: "verify",
+        replacements: {
+          UserName: user.name,
+          VerifyLink: verificationUrl,
+          YourCompanyName: "Al-and-co",
+        },
+      });
+    } catch (emailError) {
+      console.error("Verification email send nahi hua:", emailError.message);
+      // Silent fail — user ban gaya, email baad mein resend kar sakte ho
+    }
 
-    await sendEmail({
-      to: user.email,
-      subject: "Verify your email ✅",
-      templateName: "verify",
-      replacements: {
-        UserName: user.name,
-        VerifyLink: verificationUrl,
-        YourCompanyName: "Al-and-co",
-      },
-    });
-
-    res.status(201).json({ success: true, message: "Please verify your email first" });
+    res.status(201).json({ success: true, message: "Registration successful. Verification email bhej di gayi hai (agar available ho)." });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -123,16 +128,22 @@ exports.login = async (req, res) => {
 
     // Login alert email (sirf jo email wale hain)
     if (user.email) {
-      await sendEmail({
-        to: user.email,
-        subject: "New Login Alert 🔐",
-        templateName: "login",
-        replacements: {
-          UserName: user.name,
-          SecurityLink: "https://alco-crm-frontend.vercel.app/login",
-          YourCompanyName: "Al-and-co",
-        },
-      });
+      // ✅ Email fail ho toh login block na ho
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "New Login Alert 🔐",
+          templateName: "login",
+          replacements: {
+            UserName: user.name,
+            SecurityLink: "https://alco-crm-frontend.vercel.app/login",
+            YourCompanyName: "Al-and-co",
+          },
+        });
+      } catch (emailError) {
+        console.error("Login alert email send nahi hua:", emailError.message);
+        // Silent fail — login phir bhi successful rahega
+      }
     }
 
     res.status(200).json({
@@ -356,7 +367,7 @@ exports.resendVerification = async (req, res) => {
 // const sendEmail = require("../utils/sendEmail.js");
 // const generateColor = require("../utils/generateColor.js");
 
-// // REGISTER 
+// // REGISTER
 // exports.register = async (req, res) => {
 //   try {
 //     const { name, email, password, role } = req.body;
