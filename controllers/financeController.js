@@ -1375,7 +1375,7 @@ exports.getMyInvoices = async (req, res) => {
         path: "enrollment",
         populate: [
           { path: "program", select: "name short_description" },
-          { path: "batch", select: "startDate name" }
+          { path: "batch", select: "start_date name" }
         ]
       })
       .sort({ createdAt: -1 });
