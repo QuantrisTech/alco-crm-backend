@@ -1050,6 +1050,7 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
     const user = invoice.user;
+    const program = invoice.enrollment?.program;
     const contractDetails = invoice.enrollment?.leadSnapshot?.contractDetails;
 
     const formatDate = (d) =>
