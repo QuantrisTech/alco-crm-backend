@@ -935,6 +935,12 @@ exports.sendInvoiceEmail = async (req, res) => {
 
     const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
 
+    // const quantity =
+    //   invoice.enrollment?.bundle?.courses?.length ||
+    //   invoice.enrollment?.courses?.length ||
+    //   1;
+    const quantity = inv.enrollment?.program ? 1 : 0;
+
     const installmentRows = invoice.installments
       .map((inst, i) => {
         const isAdv = inst.isAdvance;
@@ -945,6 +951,9 @@ exports.sendInvoiceEmail = async (req, res) => {
           <td style="padding:13px 16px; font-size:13px; color:#0f1117; font-weight:700;">
             ${isAdv ? "Advance Payment" : inst.label || `Installment ${i + 1}`}
             ${isAdv ? `<span style="background:#c8a84b; color:#5a3a00; font-size:9px; font-weight:700; padding:2px 8px; border-radius:4px; margin-left:7px;">Advance</span>` : ""}
+          </td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">
+          ${quantity}
           </td>
           <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">${formatDate(inst.dueDate)}</td>
           <td style="padding:13px 16px;">
@@ -1104,7 +1113,7 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
         // replacements mein:
         paymentMethod: selectedInstallments[0]?.method || "—",
         referenceNo: selectedInstallments[0]?.referenceNumber || "—",
-        receiptDate: formatDate(new Date()),  
+        receiptDate: formatDate(new Date()),
         remainingAmount: formatAmount(invoice.remainingAmount || 0),
       },
     });
