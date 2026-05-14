@@ -167,7 +167,8 @@ module.exports = `
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Description</th>
             <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Qty</th>
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Due Date</th>
-            <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Status</th>
+            <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Payment Method</th>
+            <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Reference No</th>
             <th style="padding:12px 14px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Amount</th>
           </tr>
         </thead>
