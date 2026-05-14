@@ -965,7 +965,7 @@ exports.sendInvoiceEmail = async (req, res) => {
     await sendEmailDynamic({
       to: user.email,
       subject: `Invoice Reminder: ${invoice.invoiceNumber} | ALCO`,
-      templateName: "generate-receiving-invoice",
+      templateName: "send-invoice",
       replacements: {
         invoiceNumber: invoice.invoiceNumber,
         invoiceStatus: invoice.status,
