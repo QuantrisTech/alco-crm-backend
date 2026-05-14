@@ -12,6 +12,7 @@ const {
   updateInstallment,
   addInstallment,
   updateInvoice,
+  sendInvoiceEmail,
   sendReceivingInvoiceEmail,
   addPayment,
   getAllPayments,
@@ -57,6 +58,7 @@ router.post(
   addInstallment
 );
 
+router.post("/invoices/:id/send-receiving-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendInvoiceEmail);
 router.post("/invoices/:id/send-receiving-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
 
 

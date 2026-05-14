@@ -14,7 +14,8 @@ const templates = {
     "lead-interested": require("../template/lead-interested.js"),
     "payment-plan-updated": require("../template/payment-plan-updated.js"),
     "contract-submitted": require("../template/contract-submitted.js"),
-    "generate-receiving-invoice": require("../template/generate-receiving-invoice.js")
+    "send-invoice": require("../template/send-invoice.js"),
+    "send-receipt-receiving": require("../template/send-receipt-receiving.js")
 };
 
 const sendEmailDynamic = async (options) => {

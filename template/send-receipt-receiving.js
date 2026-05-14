@@ -99,10 +99,6 @@ module.exports = `
                 <td style="font-size:11px;color:#8a92a6;padding-right:8px;padding-bottom:4px;white-space:nowrap;vertical-align:top;">Address</td>
                 <td style="font-size:12px;color:#4a5060;padding-bottom:4px;line-height:1.5;">{{studentAddress}}</td>
               </tr>
-              <tr>
-                <td style="font-size:11px;color:#8a92a6;padding-right:8px;white-space:nowrap;">Profession</td>
-                <td style="font-size:12px;color:#4a5060;">{{studentProfession}}</td>
-              </tr>
             </table>
           </div>
         </td>
@@ -220,13 +216,6 @@ module.exports = `
         Late payments may result in restricted portal access.
         For queries contact: <strong style="color:#0f1117;">finance@alco.com</strong>
       </div>
-
-      <!-- Plan notes if any -->
-      {{#if planNotes}}
-      <div style="font-size:12px;color:#4a5060;font-style:italic;margin-bottom:14px;padding:10px 14px;background:#ffffff;border-radius:8px;border-left:3px solid #c8a84b;">
-        {{planNotes}}
-      </div>
-      {{/if}}
 
       <!-- Policy bullets -->
       <table cellpadding="0" cellspacing="0" width="100%">
