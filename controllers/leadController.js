@@ -1340,7 +1340,7 @@ exports.markInterested = async (req, res) => {
 // ─── 2. Submit Contract (user side) ──────────────────────────
 exports.submitContract = async (req, res) => {
     try {
-        const lead = await Lead.findById(req.params.id);
+        const lead = await Lead.findById(req.params.id).populate("program_id", "name");
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
         const {
@@ -1359,6 +1359,7 @@ exports.submitContract = async (req, res) => {
         // Merge karo — auto-fill fields preserve hongi
         lead.contractDetails = {
             ...lead.contractDetails,
+            programName: lead.program_id?.name || "—",
             fatherHusbandName,
             cnic,
             bankAccountNumber,
@@ -1395,7 +1396,7 @@ exports.submitContract = async (req, res) => {
                 templateName: "contract-submitted",
                 replacements: {
                     UserName: user.name || lead.first_name,
-                    ProgramName: lead.program_name || "the program",
+                    ProgramName: lead.contractDetails?.programName || "the program",
                     SupportEmail: "alco@support.com",
                     YourCompanyName: "Al-and-co",
                 },
