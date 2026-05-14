@@ -935,11 +935,10 @@ exports.sendInvoiceEmail = async (req, res) => {
 
     const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
 
-    // const quantity =
-    //   invoice.enrollment?.bundle?.courses?.length ||
-    //   invoice.enrollment?.courses?.length ||
-    //   1;
-    const quantity = inv.enrollment?.program ? 1 : 0;
+    const quantity =
+      invoice.enrollment?.bundle?.courses?.length ||
+      invoice.enrollment?.courses?.length ||
+      1;
 
     const installmentRows = invoice.installments
       .map((inst, i) => {
