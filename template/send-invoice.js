@@ -155,9 +155,7 @@ module.exports = `
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#1a3a5c;margin-bottom:2px;">Enrolled Program</div>
             <div style="font-size:14px;font-weight:800;color:#1a3a5c;">{{programName}}</div>
           </td>
-          <td style="vertical-align:middle;text-align:right;">
-            <div style="font-size:11.5px;color:#4a5060;font-style:italic;max-width:220px;line-height:1.5;">{{planNotes}}</div>
-          </td>
+         
         </tr>
       </table>
     </div>

@@ -1108,15 +1108,33 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
         : `Payment Receipt: ${invoice.invoiceNumber} | ALCO`,
       templateName: "send-receipt-receiving",
       replacements: {
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceStatus: invoice.status,
+        issueDate: formatDate(new Date()),
+        advanceDueDate: formatDate(invoice.dueDate),
+        enrollmentId:
+          invoice.enrollment?._id?.toString().slice(0, 8) +
+          "..." +
+          invoice.enrollment?._id?.toString().slice(-4),
         studentName: user.name,
         studentEmail: user.email,
         studentPhone: user.phone || "—",
+        salesManagerName: "Finance Team",
+        salesManagerEmail: "finance@alco.com",
+        batchName: invoice.enrollment?.batch?.name || "—",
+        batchStartDate: formatDate(invoice.enrollment?.batch?.start_date),
+        batchEndDate: formatDate(invoice.enrollment?.batch?.end_date),
+        studentCnic: contractDetails.cnic || "—",
         studentAddress: contractDetails?.currentAddress || "—",
+        studentProfession: contractDetails?.occupation || "—",
+        programName: program?.name || "Program",
         // receiptDate: formatDate(date ? new Date(date) : new Date()),
         // referenceNo: referenceNo || "—",
         // paymentMethod: paymentMethod || "—",
         installmentRows: receiptRows,
         memoRow,
+        totalAmount: formatAmount(invoice.totalAmount),
+        paidAmount: formatAmount(invoice.paidAmount || 0),
         // replacements mein:
         paymentMethod: selectedInstallments[0]?.method || "—",
         referenceNo: selectedInstallments[0]?.referenceNumber || "—",
