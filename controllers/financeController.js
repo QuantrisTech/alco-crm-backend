@@ -913,7 +913,7 @@ exports.getMyInvoices = async (req, res) => {
 };
 
 exports.sendInvoiceEmail = async (req, res) => {
- try {
+  try {
     const invoice = await Invoice.findById(req.params.id)
       .populate("user", "name email phone")
       .populate({
@@ -1059,19 +1059,23 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
       return res.status(400).json({ success: false, message: "Koi paid installment nahi mili" });
 
     // ── Receipt rows ──────────────────────────────────────────
+    // receipt rows mein method aur reference installment se lo
     const receiptRows = selectedInstallments.map((inst, i) => `
-      <tr style="border-bottom:1px solid #f0f0f0;">
-        <td style="padding:12px;font-size:12px;color:#8a92a6;">${i + 1}</td>
-        <td style="padding:12px;font-size:13px;color:#0f1117;font-weight:600;">${invoice.invoiceNumber}</td>
-        <td style="padding:12px;font-size:12px;color:#4a5060;">${formatDate(inst.dueDate)}</td>
-        <td style="padding:12px;font-size:12px;color:#4a5060;">
-          ${inst.isAdvance ? "Advance Payment" : inst.label || `Installment ${i + 1}`}
-        </td>
-        <td style="padding:12px;text-align:right;font-size:13px;font-weight:700;color:#0f1117;">
-          ${formatAmount(inst.amount)}.00
-        </td>
-      </tr>
-    `).join("");
+  <tr style="border-bottom:1px solid #f0f0f0;">
+    <td style="padding:12px;font-size:12px;color:#8a92a6;">${i + 1}</td>
+    <td style="padding:12px;font-size:13px;color:#0f1117;font-weight:600;">${invoice.invoiceNumber}</td>
+    <td style="padding:12px;font-size:12px;color:#4a5060;">${formatDate(inst.dueDate)}</td>
+    <td style="padding:12px;font-size:12px;color:#4a5060;">
+      ${inst.isAdvance ? "Advance Payment" : inst.label || `Installment ${i + 1}`}
+    </td>
+    <td style="padding:12px;font-size:12px;color:#4a5060;">${inst.method || "—"}</td>
+    <td style="padding:12px;font-size:12px;font-mono;color:#4a5060;">${inst.referenceNumber || "—"}</td>
+    <td style="padding:12px;text-align:right;font-size:13px;font-weight:700;color:#0f1117;">
+      ${formatAmount(inst.amount)}.00
+    </td>
+  </tr>
+`).join("");
+
 
     // ── Memo row ──────────────────────────────────────────────
     const memoRow = invoice.description
@@ -1092,11 +1096,15 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
         studentEmail: user.email,
         studentPhone: user.phone || "—",
         studentAddress: contractDetails?.currentAddress || "—",
-        receiptDate: formatDate(date ? new Date(date) : new Date()),
-        referenceNo: referenceNo || "—",
-        paymentMethod: paymentMethod || "—",
+        // receiptDate: formatDate(date ? new Date(date) : new Date()),
+        // referenceNo: referenceNo || "—",
+        // paymentMethod: paymentMethod || "—",
         receiptRows,
         memoRow,
+        // replacements mein:
+        paymentMethod: selectedInstallments[0]?.method || "—",
+        referenceNo: selectedInstallments[0]?.referenceNumber || "—",
+        receiptDate: formatDate(new Date()),  
         remainingAmount: formatAmount(invoice.remainingAmount || 0),
       },
     });
