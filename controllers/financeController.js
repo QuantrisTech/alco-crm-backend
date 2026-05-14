@@ -954,6 +954,14 @@ exports.sendInvoiceEmail = async (req, res) => {
           <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">
           ${quantity}
           </td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060; text-transform:capitalize;">
+          ${inst.method || "—"}
+          </td>
+
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">
+          ${inst.referenceNumber || "—"}
+          </td>
+          </td>
           <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">${formatDate(inst.dueDate)}</td>
           <td style="padding:13px 16px;">
             <span style="font-size:9.5px; font-weight:700; padding:3px 9px; border-radius:5px;

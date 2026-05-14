@@ -65,14 +65,7 @@ module.exports = `
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#8a92a6;margin-bottom:5px;">Enrollment ID</div>
         <div style="font-family:'Courier New',monospace;font-size:11px;color:#4a5060;">{{enrollmentId}}</div>
       </td>
-      <td style="padding:18px 24px;border-right:1px solid #dde2ec;width:20%;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#8a92a6;margin-bottom:5px;">Payment Method</div>
-      <div style="font-size:13px;font-weight:700;color:#0f1117;">{{paymentMethod}}</div>
-      </td>
-      <td style="padding:18px 24px;width:20%;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#8a92a6;margin-bottom:5px;">Reference No</div>
-      <div style="font-family:'Courier New',monospace;font-size:12px;color:#0f1117;">{{referenceNo}}</div>
-      </td>
+    
     </tr>
   </table>
 
@@ -178,6 +171,8 @@ module.exports = `
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:36px;">#</th>
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Description</th>
             <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Qty</th>
+            <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Payment Method</th>
+            <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;width:50px;">Reference No</th>
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Due Date</th>
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Status</th>
             <th style="padding:12px 14px;text-align:right;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Amount</th>
@@ -230,12 +225,6 @@ module.exports = `
       </div>
 
       <!-- Plan notes if any -->
-      {{#if planNotes}}
-      <div style="font-size:12px;color:#4a5060;font-style:italic;margin-bottom:14px;padding:10px 14px;background:#ffffff;border-radius:8px;border-left:3px solid #c8a84b;">
-        {{planNotes}}
-      </div>
-      {{/if}}
-
       <!-- Policy bullets -->
       <table cellpadding="0" cellspacing="0" width="100%">
         <tr>
