@@ -1115,7 +1115,7 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
         // receiptDate: formatDate(date ? new Date(date) : new Date()),
         // referenceNo: referenceNo || "—",
         // paymentMethod: paymentMethod || "—",
-        receiptRows,
+        installmentRows: receiptRows,
         memoRow,
         // replacements mein:
         paymentMethod: selectedInstallments[0]?.method || "—",
