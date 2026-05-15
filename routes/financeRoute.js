@@ -14,6 +14,7 @@ const {
   updateInvoice,
   sendInvoiceEmail,
   sendReceivingInvoiceEmail,
+  getSalesRoleInvoices,
   addPayment,
   getAllPayments,
   getPaymentById,
@@ -60,6 +61,12 @@ router.post(
 
 router.post("/invoices/:id/send-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendInvoiceEmail);
 router.post("/invoices/:id/send-receiving-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
+router.get(
+  "/invoices/sales",
+  protect,
+  authorize("sales_manager", "sales_rep"),
+  getSalesRoleInvoices
+);
 
 
 // ─── PAYMENT ROUTES ───────────────────────────────────────────

@@ -1271,3 +1271,44 @@ exports.sendReceivingInvoiceEmail = async (req, res) => {
 //     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
+
+// GET — Sales Manager ki assigned leads ki invoices
+exports.getSalesRoleInvoices = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+
+    // Sales manager ki assigned leads dhundo
+    const leads = await Lead.find({
+      assigned_to: req.user._id,
+      status: "converted"
+    }).select("user_id");
+
+    const userIds = leads.map((l) => l.user_id);
+
+    const filter = { user: { $in: userIds } };
+    if (status) filter.status = status;
+
+    const invoices = await Invoice.find(filter)
+      .populate("user", "name email phone")
+      .populate({
+        path: "enrollment",
+        populate: [
+          { path: "program", select: "name short_description" },
+          { path: "batch", select: "name start_date end_date" },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+    const total = await Invoice.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: invoices,
+      meta: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
