@@ -106,10 +106,13 @@ router.get(
   async (req, res) => {
     try {
       const timestamp = Math.round(new Date().getTime() / 1000);
+      
+      // ❌ resource_type signature params mein nahi hoga
       const signature = cloudinary.utils.api_sign_request(
-        { timestamp, folder: "lesson-audios", resource_type: "video" },
+        { timestamp, folder: "lesson-audios" },
         process.env.CLOUDINARY_API_SECRET
       );
+      
       res.json({
         timestamp,
         signature,
