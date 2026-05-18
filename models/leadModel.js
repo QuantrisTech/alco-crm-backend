@@ -82,7 +82,7 @@ const leadSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["utm", "referral", "social", "facebook", "organic", "enroll", "contact", "other"],
+      enum: ["utm", "referral", "social", "facebook", "google", "organic", "enroll", "contact", "other"],
       default: "enroll"
     },
 
@@ -182,9 +182,9 @@ const leadSchema = new mongoose.Schema(
     },
 
     advance_paid: {
-  type: Boolean,
-  default: false,
-},
+      type: Boolean,
+      default: false,
+    },
 
     lost_reason: String,
     lost_notes: String,
