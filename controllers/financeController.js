@@ -1277,7 +1277,7 @@ exports.getSalesRoleInvoices = async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
 
-    // Sales manager ki assigned leads dhundo
+    // sales_manager aur sales_rep dono handle
     const leads = await Lead.find({
       assigned_to: req.user._id,
       status: "converted"
