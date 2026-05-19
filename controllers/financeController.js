@@ -885,6 +885,7 @@ exports.getPendingReport = async (req, res) => {
 exports.getMyInvoices = async (req, res) => {
   try {
     const invoices = await Invoice.find({ user: req.user.id })
+      .populate("user", "name email phone documents")
       .populate({
         path: "enrollment",
         populate: [
