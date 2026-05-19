@@ -1343,6 +1343,13 @@ exports.submitContract = async (req, res) => {
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
+         if (lead.status === "converted") {
+            return res.status(400).json({
+                success: false,
+                message: "Contract cannot be edited after lead is converted.",
+            });
+        }
+
         const program = await Program.findById(lead.program_id);
         const programName = program?.name || "";
 
@@ -1413,27 +1420,43 @@ exports.submitContract = async (req, res) => {
 };
 
 // ─── Get My Contract (user side) ─────────────────────────────
+// exports.getMyContract = async (req, res) => {
+//     try {
+//         // req.user._id se lead dhundo jo is user ka ho
+//         const lead = await Lead.findOne({
+//             user_id: req.user._id,
+//             status: "interested", // sirf interested leads
+//         })
+//             .select("first_name last_name email phone program_name contractDetails paymentPlan status")
+//             .populate("program_id", "name")
+//             .sort({ updatedAt: -1 }); // latest pehle
+
+//         if (!lead) {
+//             return res.status(200).json({
+//                 success: true,
+//                 data: null,
+//                 message: "No contract found"
+//             });
+//         }
+
+//         res.status(200).json({ success: true, data: lead });
+
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
+
 exports.getMyContract = async (req, res) => {
     try {
-        // req.user._id se lead dhundo jo is user ka ho
-        const lead = await Lead.findOne({
+        const leads = await Lead.find({
             user_id: req.user._id,
-            status: "interested", // sirf interested leads
+            "contractDetails.status": { $in: ["pending", "filled", "signed"] },
         })
-            .select("first_name last_name email phone program_name contractDetails paymentPlan status")
+            .select("first_name last_name email phone program_name program_id contractDetails paymentPlan status createdAt updatedAt")
             .populate("program_id", "name")
-            .sort({ updatedAt: -1 }); // latest pehle
+            .sort({ updatedAt: -1 });
 
-        if (!lead) {
-            return res.status(200).json({
-                success: true,
-                data: null,
-                message: "No contract found"
-            });
-        }
-
-        res.status(200).json({ success: true, data: lead });
-
+        res.status(200).json({ success: true, data: leads });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

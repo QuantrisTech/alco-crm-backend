@@ -5,6 +5,7 @@ const {
   createLead,
   createLeadContact,
   getMyContract,
+  updateContract,
   getLeads,
   getLeadById,
   updateLead,
@@ -33,7 +34,11 @@ router.post("/contact", createLeadContact);
 router.get("/stats", protect, authorize("super_admin", "admin", "sales_manager"), getLeadsStats);
 
 // ✅ Get My Contract 
-router.get("/my-contract", protect, getMyContract);  
+router.get("/my-contract", protect, getMyContract); 
+
+// Admin/Sales Manager contract edit kare
+router.patch("/:id/contract-edit", protect, authorize("super_admin", "admin", "sales_manager"), updateContract);
+
 
 // ✅ Get Leads 
 router.get("/", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), getLeads);
