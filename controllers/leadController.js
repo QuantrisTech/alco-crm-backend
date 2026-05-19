@@ -1462,6 +1462,34 @@ exports.getMyContract = async (req, res) => {
     }
 };
 
+// leadController.js
+exports.updateContract = async (req, res) => {
+    try {
+        const lead = await Lead.findById(req.params.id);
+        if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+        // Converted lead ka contract edit nahi hoga
+        if (lead.status === "converted") {
+            return res.status(400).json({
+                success: false,
+                message: "Cannot edit contract of a converted lead.",
+            });
+        }
+
+        lead.contractDetails = {
+            ...lead.contractDetails,
+            ...req.body,
+            // status preserve karo ya update karo
+            status: req.body.status || lead.contractDetails?.status || "filled",
+        };
+
+        await lead.save();
+        res.status(200).json({ success: true, data: lead });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
 
 // ─── 3. Update Payment Plan (admin) — notification bhi ───────
 exports.updatePaymentPlan = async (req, res) => {
