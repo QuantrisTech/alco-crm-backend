@@ -99,7 +99,7 @@ exports.changePassword = async (req, res) => {
 };
 
 // ✅ CHANGE Document
-const uploadUserDocument = async (req, res) => {
+exports.uploadUserDocument = async (req, res) => {
   const { type, label, url, fileType } = req.body;
 
   const user = await User.findByIdAndUpdate(
@@ -116,7 +116,7 @@ const uploadUserDocument = async (req, res) => {
 };
 
 // ✅ DELETE Document
-const deleteUserDocument = async (req, res) => {
+exports.deleteUserDocument = async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.params.id,
     {
