@@ -145,6 +145,33 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    documents: [
+      {
+        type: {
+          type: String,
+          enum: ["cnic", "receipt", "certificate", "other"],
+          required: true,
+        },
+        label: {
+          type: String,
+          default: null,
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        fileType: {
+          type: String,
+          enum: ["image", "pdf"],
+          required: true,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -98,6 +98,38 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+// ✅ CHANGE Document
+const uploadUserDocument = async (req, res) => {
+  const { type, label, url, fileType } = req.body;
+
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      $push: {
+        documents: { type, label, url, fileType },
+      },
+    },
+    { new: true }
+  );
+
+  res.json({ success: true, documents: user.documents });
+};
+
+// ✅ DELETE Document
+const deleteUserDocument = async (req, res) => {
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      $pull: {
+        documents: { _id: req.params.docId },
+      },
+    },
+    { new: true }
+  );
+
+  res.json({ success: true, documents: user.documents });
+};
+
 // ✅ DELETE OWN ACCOUNT
 exports.deleteMyAccount = async (req, res) => {
   try {
