@@ -48,12 +48,18 @@ const userSchema = new mongoose.Schema(
     //   default: null,
     // },
 
+    // password: {
+    //   type: String,
+    //   required: true,
+    //   select: false,
+    // },
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return !this.is_old_user;
+      },
       select: false,
     },
-
     role: {
       type: String,
       enum: [
