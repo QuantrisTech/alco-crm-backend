@@ -69,17 +69,15 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
-    // ✅ OLD USER FLAGS
-    // is_old_user: {
-    //   type: Boolean,
-    //   default: false,
-    // },
+    is_old_user: {
+      type: Boolean,
+      default: false,
+    },
 
-    // old user login ke baad yeh true rehega jab tak secure na kare
-    // needsAccountSetup: {
-    //   type: Boolean,
-    //   default: false,
-    // },
+    needsAccountSetup: {
+      type: Boolean,
+      default: false,
+    },
 
     source: {
       type: String,
