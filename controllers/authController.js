@@ -110,8 +110,10 @@ exports.login = async (req, res) => {
     }
 
     // ✅ NORMAL USER — email verify + password check
-    if (!user.isVerified) {
-      return res.status(401).json({ message: "Please verify your email first" });
+    if (!user.is_old_user && !user.isVerified) {
+      return res.status(401).json({
+        message: "Please verify your email first",
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
