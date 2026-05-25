@@ -237,6 +237,10 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://alco-crm-frontend.vercel.app",
   "https://alco-cms-website.vercel.app",
+  "https://arslanlarik.com",
+  "https://www.arslanlarik.com",
+  "https://portal.arslanlarik.com",
+  "https://app.arslanlarik.com",
 ];
 
 // app.use(
