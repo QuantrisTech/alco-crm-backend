@@ -1,15 +1,29 @@
 // controllers/lmsAdminController.js
-// Admin/Super_admin — LMS content manage karo
 const Assignment  = require("../models/assignmentModel");
 const Submission  = require("../models/submissionModel");
 const LiveSession = require("../models/liveSessionModel");
 const Resource    = require("../models/resourceModel");
-const Lead      = require("../models/leadModel");
-const sendEmail = require("../utils/sendEmail");
-const cloudinary = require("../config/cloudinary");
+const Lead        = require("../models/leadModel");
+const User        = require("../models/userModel");
+const sendEmail   = require("../utils/sendEmail");
+const cloudinary  = require("../config/cloudinary");
 const streamifier = require("streamifier");
+const { notifyBookRequested } = require("./notificationController");
 
-// ─── ASSIGNMENTS ──────────────────────────────────────────────
+// ── Helper: Cloudinary upload ─────────────────────────────────
+const uploadToCloudinary = (buffer, options) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (err, result) => {
+      if (err) reject(err);
+      else resolve(result);
+    });
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
+
+// ═════════════════════════════════════════════════════════════
+// ASSIGNMENTS
+// ═════════════════════════════════════════════════════════════
 
 exports.adminGetAssignments = async (req, res) => {
   try {
@@ -58,7 +72,9 @@ exports.adminDeleteAssignment = async (req, res) => {
   }
 };
 
-// ─── LIVE SESSIONS ────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// LIVE SESSIONS
+// ═════════════════════════════════════════════════════════════
 
 exports.adminGetLiveSessions = async (req, res) => {
   try {
@@ -106,126 +122,21 @@ exports.adminDeleteLiveSession = async (req, res) => {
   }
 };
 
-// ─── RESOURCES ────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// RESOURCES — ADMIN CRUD
+// ═════════════════════════════════════════════════════════════
 
-// exports.adminGetResources = async (req, res) => {
-//   try {
-//     const { program_id, course_id } = req.query;
-//     const filter = {};
-//     if (program_id) filter.program_id = program_id;
-//     if (course_id)  filter.course_id  = course_id;
-
-//     const resources = await Resource.find(filter)
-//       .populate("program_id", "name")
-//       .sort({ createdAt: -1 });
-
-//     res.json({ success: true, data: resources });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.adminCreateResource = async (req, res) => {
-//   try {
-//     const resource = await Resource.create({ ...req.body, uploaded_by: req.user.id });
-//     res.status(201).json({ success: true, data: resource });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.adminUpdateResource = async (req, res) => {
-//   try {
-//     const resource = await Resource.findByIdAndUpdate(req.params.id, req.body, { new: true });
-//     if (!resource) return res.status(404).json({ success: false, message: "Not found" });
-//     res.json({ success: true, data: resource });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.adminDeleteResource = async (req, res) => {
-//   try {
-//     await Resource.findByIdAndDelete(req.params.id);
-//     res.json({ success: true, message: "Resource deleted" });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// controllers/resourceController.js
-const uploadToCloudinary = (buffer, options) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(options, (err, result) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
-    streamifier.createReadStream(buffer).pipe(stream);
-  });
-};
-
-// ════════════════════════════════════════════════════════════
-// ADMIN — CRUD
-// ════════════════════════════════════════════════════════════
-
-// POST /admin/v1/resources
-exports.adminCreateResource = async (req, res) => {
-  try {
-    const { title, description } = req.body;
-    if (!title) return res.status(400).json({ success: false, message: "Title required" });
-
-    let file_url        = "";
-    let cover_image_url = "";
-
-    // ── PDF upload ───────────────────────────────────────────
-    if (req.files?.pdf?.[0]) {
-      const result = await uploadToCloudinary(req.files.pdf[0].buffer, {
-        folder:        "alco/resources/pdfs",
-        resource_type: "raw",
-        format:        "pdf",
-      });
-      file_url = result.secure_url;
-    } else {
-      return res.status(400).json({ success: false, message: "PDF file required" });
-    }
-
-    // ── Cover image upload ───────────────────────────────────
-    if (req.files?.image?.[0]) {
-      const result = await uploadToCloudinary(req.files.image[0].buffer, {
-        folder:        "alco/resources/covers",
-        resource_type: "image",
-      });
-      cover_image_url = result.secure_url;
-    }
-
-    const resource = await Resource.create({
-      title,
-      description,
-      file_url,
-      cover_image_url,
-      uploaded_by: req.user.id,
-    });
-
-    res.status(201).json({ success: true, data: resource });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// GET /admin/v1/resources
 exports.adminGetResources = async (req, res) => {
   try {
     const resources = await Resource.find()
       .populate("uploaded_by", "name")
       .sort({ createdAt: -1 });
-
     res.json({ success: true, data: resources });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// GET /admin/v1/resources/:id
 exports.adminGetResourceById = async (req, res) => {
   try {
     const resource = await Resource.findById(req.params.id).populate("uploaded_by", "name");
@@ -236,7 +147,43 @@ exports.adminGetResourceById = async (req, res) => {
   }
 };
 
-// PUT /admin/v1/resources/:id
+exports.adminCreateResource = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    if (!title) return res.status(400).json({ success: false, message: "Title required" });
+    if (!req.files?.pdf?.[0]) return res.status(400).json({ success: false, message: "PDF required" });
+
+    // ── PDF upload ────────────────────────────────────────────
+    const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
+      folder:        "alco/resources/pdfs",
+      resource_type: "raw",
+      format:        "pdf",
+    });
+
+    // ── Cover image upload (optional) ─────────────────────────
+    let cover_image_url = "";
+    if (req.files?.image?.[0]) {
+      const imgResult = await uploadToCloudinary(req.files.image[0].buffer, {
+        folder:        "alco/resources/covers",
+        resource_type: "image",
+      });
+      cover_image_url = imgResult.secure_url;
+    }
+
+    const resource = await Resource.create({
+      title,
+      description,
+      file_url:        pdfResult.secure_url,
+      cover_image_url,
+      uploaded_by:     req.user.id,
+    });
+
+    res.status(201).json({ success: true, data: resource });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.adminUpdateResource = async (req, res) => {
   try {
     const resource = await Resource.findById(req.params.id);
@@ -246,7 +193,6 @@ exports.adminUpdateResource = async (req, res) => {
     if (title)       resource.title       = title;
     if (description) resource.description = description;
 
-    // ── New PDF upload ho toh replace karo ───────────────────
     if (req.files?.pdf?.[0]) {
       const result = await uploadToCloudinary(req.files.pdf[0].buffer, {
         folder:        "alco/resources/pdfs",
@@ -256,7 +202,6 @@ exports.adminUpdateResource = async (req, res) => {
       resource.file_url = result.secure_url;
     }
 
-    // ── New image upload ho toh replace karo ─────────────────
     if (req.files?.image?.[0]) {
       const result = await uploadToCloudinary(req.files.image[0].buffer, {
         folder:        "alco/resources/covers",
@@ -272,7 +217,6 @@ exports.adminUpdateResource = async (req, res) => {
   }
 };
 
-// DELETE /admin/v1/resources/:id
 exports.adminDeleteResource = async (req, res) => {
   try {
     await Resource.findByIdAndDelete(req.params.id);
@@ -282,25 +226,21 @@ exports.adminDeleteResource = async (req, res) => {
   }
 };
 
-// ════════════════════════════════════════════════════════════
-// PUBLIC — Website pe books dikhao
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
+// PUBLIC — Website books
+// ═════════════════════════════════════════════════════════════
 
-// GET /api/v1/resources
-exports.getPublicResources = async (req, res) => {
+exports.adminGetPublicResources = async (req, res) => {
   try {
     const resources = await Resource.find({ is_public: true })
       .select("title description cover_image_url")
       .sort({ createdAt: -1 });
-
     res.json({ success: true, data: resources });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// POST /api/v1/resources/:id/request
-// Lead banao + PDF email karo
 exports.requestBook = async (req, res) => {
   try {
     const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
@@ -311,17 +251,17 @@ exports.requestBook = async (req, res) => {
       return res.status(400).json({ success: false, message: "first_name, email, phone required" });
     }
 
-    // ── Lead create ──────────────────────────────────────────
-    // await Lead.create({
-    //   first_name,
-    //   last_name:  last_name || "",
-    //   email,
-    //   phone,
-    //   source:     `resource-${resource._id}`, // kaunsi book thi track karo
-    //   query:      `Book request: ${resource.title}`,
-    // });
+    // ── Lead create ───────────────────────────────────────────
+    const lead = await Lead.create({
+      first_name,
+      last_name:  last_name || "",
+      email,
+      phone,
+      source:     `resource-${resource._id}`,
+      query:      `Book request: ${resource.title}`,
+    });
 
-    // ── Email bhejo ──────────────────────────────────────────
+    // ── Email bhejo ───────────────────────────────────────────
     await sendEmail({
       to:           email,
       subject:      `📖 Your Book: ${resource.title}`,
@@ -333,23 +273,32 @@ exports.requestBook = async (req, res) => {
       },
     });
 
+    // ── Super admin ko notify karo ────────────────────────────
+    const superAdmin = await User.findOne({ role: "super_admin" }).select("_id");
+    if (superAdmin) {
+      await notifyBookRequested({
+        adminId:   superAdmin._id,
+        userName:  `${first_name} ${last_name || ""}`.trim(),
+        bookTitle: resource.title,
+        leadId:    lead._id,
+      }).catch(() => {});
+    }
+
     res.json({ success: true, message: "Book sent to your email!" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ════════════════════════════════════════════════════════════
-// LMS — Logged-in users freely dekhein
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
+// LMS — Logged-in users
+// ═════════════════════════════════════════════════════════════
 
-// GET /api/v1/lms/resources
 exports.lmsGetResources = async (req, res) => {
   try {
     const resources = await Resource.find({ is_public: true })
       .select("title description cover_image_url file_url")
       .sort({ createdAt: -1 });
-
     res.json({ success: true, data: resources });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

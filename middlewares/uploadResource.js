@@ -1,37 +1,26 @@
-// middleware/uploadResource.js
-const multer = require("multer");
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const cloudinary = require("../config/cloudinary"); // tumhara existing cloudinary config
+// middlewares/uploadResource.js
+const multer    = require("multer");
+const cloudinary = require("../config/cloudinary"); // tumhara existing config
+const streamifier = require("streamifier"); // npm i streamifier
 
-// PDF storage
-const pdfStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder:        "alco/resources/pdfs",
-    resource_type: "raw",   // PDF ke liye raw zaroori hai
-    allowed_formats: ["pdf"],
-  },
-});
+// ── Buffer ko Cloudinary pe upload karo ──────────────────────
+const uploadToCloudinary = (buffer, options) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (err, result) => {
+      if (err) reject(err);
+      else resolve(result);
+    });
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 
-// Image storage
-const imageStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder:          "alco/resources/covers",
-    resource_type:   "image",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-  },
-});
-
-const uploadPdf   = multer({ storage: pdfStorage });
-const uploadImage = multer({ storage: imageStorage });
-
-// Single request mein dono fields handle karo
+// ── Multer — memory mein lo (Cloudinary khud handle karega) ──
 const uploadResourceFiles = multer({
-  storage: multer.memoryStorage(), // pehle memory mein lo
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 50 * 1024 * 1024 }, // 50MB max
 }).fields([
   { name: "pdf",   maxCount: 1 },
   { name: "image", maxCount: 1 },
 ]);
 
-module.exports = { uploadPdf, uploadImage, uploadResourceFiles };
+module.exports = { uploadResourceFiles, uploadToCloudinary };
