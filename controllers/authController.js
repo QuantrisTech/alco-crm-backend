@@ -277,6 +277,8 @@ exports.resetPassword = async (req, res) => {
   user.resetPasswordToken = undefined;
   user.resetPasswordExpire = undefined;
   user.resetPasswordAttempts = 0;
+  user.isTemporaryPassword = false;   
+  user.needsAccountSetup = false; 
   await user.save();
 
   res.json({ success: true, message: "Password reset successfully" });
@@ -333,6 +335,8 @@ exports.refreshToken = async (req, res) => {
     const newAccessToken = generateToken(user);
     const newRefreshToken = generateRefreshToken(user);
     user.refreshToken = newRefreshToken;
+    user.isTemporaryPassword = false;
+    user.needsAccountSetup = false;
     await user.save();
 
     return res.status(200).json({ success: true, data: { access_token: newAccessToken, refresh_token: newRefreshToken, token_type: "Bearer", expires_in: 3600 } });
