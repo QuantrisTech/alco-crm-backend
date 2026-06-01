@@ -238,9 +238,9 @@ const allowedOrigins = [
   "https://alco-crm-frontend.vercel.app",
   "https://alco-cms-website.vercel.app",
   "https://arslanlarik.com",
+  "https://app.arslanlarik.com",
   "https://www.arslanlarik.com",
   "https://portal.arslanlarik.com",
-  "https://app.arslanlarik.com",
 ];
 
 // app.use(

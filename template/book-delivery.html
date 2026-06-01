@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .header { background: #000; padding: 32px; text-align: center; }
+    .header h1 { color: #fff; margin: 0; font-size: 24px; letter-spacing: 1px; }
+    .body { padding: 36px 40px; }
+    .body h2 { color: #111; font-size: 20px; margin-top: 0; }
+    .book-title { background: #f9f9f9; border-left: 4px solid #000; padding: 12px 16px; font-weight: 600; font-size: 16px; margin: 20px 0; border-radius: 4px; }
+    .btn { display: inline-block; background: #000; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600; margin-top: 8px; }
+    .fallback { margin-top: 16px; font-size: 12px; color: #999; word-break: break-all; }
+    .footer { padding: 24px 40px; background: #f5f5f5; text-align: center; font-size: 12px; color: #999; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>AL & CO</h1>
+    </div>
+    <div class="body">
+      <h2>Hello, {{UserName}}! 👋</h2>
+      <p>Thank you for your interest. Your requested book is ready for download:</p>
+      <div class="book-title">📖 {{BookTitle}}</div>
+      <p>Click the button below to download your free copy:</p>
+      <a href="{{BookUrl}}" class="btn">Download Book</a>
+      <p class="fallback">
+        If the button doesn't work, copy and paste this link into your browser:<br/>
+        <a href="{{BookUrl}}">{{BookUrl}}</a>
+      </p>
+    </div>
+    <div class="footer">
+      Pakistan's Best Institute of NLP Training & Coaching<br/>
+      © AL & CO — All rights reserved
+    </div>
+  </div>
+</body>
+</html>

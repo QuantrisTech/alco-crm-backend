@@ -101,6 +101,39 @@ const notifyContractSubmitted = ({ userId, leadName, leadId, triggeredBy }) => {
   });
 };
 
+// Access extend hone pe — user ko
+const notifyAccessExtended = ({ userId, days, triggeredBy }) => {
+  return createNotification({
+    user_id: userId,
+    type: "access_extended",
+    title: "Access Extended ✅",
+    message: `Your access has been extended by ${days} days.`,
+    triggered_by: triggeredBy,
+  });
+};
+
+// Finance pool khatam — admin ko
+const notifyPoolExhausted = ({ adminId, enrollmentId, triggeredBy }) => {
+  return createNotification({
+    user_id: adminId,
+    type: "pool_exhausted",
+    title: "Finance Grace Pool Exhausted ⚠️",
+    message: `Enrollment ${enrollmentId}'s finance grace pool has been exhausted. Admin intervention required.`,
+    triggered_by: triggeredBy,
+  });
+};
+
+// notificationController.js mein add karo
+const notifyBookRequested = ({ adminId, userName, bookTitle, leadId }) => {
+  return createNotification({
+    user_id:     adminId,   // super_admin ka _id
+    type:        "book_requested",
+    title:       "New Book Request 📚",
+    message:     `${userName} has requested the book "${bookTitle}".`,
+    lead_id:     leadId,    // click karke lead pe ja sake
+  });
+};
+
 
 module.exports = {
   createNotification,
@@ -109,4 +142,7 @@ module.exports = {
   notifyStatusChanged,
   notifyPaymentPlanSet,
   notifyContractSubmitted,
+  notifyAccessExtended,
+  notifyPoolExhausted,
+  notifyBookRequested
 };

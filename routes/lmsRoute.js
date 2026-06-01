@@ -62,8 +62,8 @@ router.get("/:enrollmentId/live-sessions/:id",                  protect, isStude
 router.post("/:enrollmentId/live-sessions/:id/register",        protect, isStudent, registerForLiveSession);
 
 // Resources
-router.get("/:enrollmentId/resources",                          protect, isStudent, getResources);
-router.get("/:enrollmentId/resources/:id/download",             protect, isStudent, getResourceDownloadUrl);
+// router.get("/:enrollmentId/resources",                          protect, isStudent, getResources);
+// router.get("/:enrollmentId/resources/:id/download",             protect, isStudent, getResourceDownloadUrl);
 
 // Comments
 router.get("/:enrollmentId/lessons/:lessonId/comments", protect, getLessonComments);

@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const accessOverrideSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["ADMIN_GRANT", "AUTO_GRANT", "MANUAL_OVERRIDE"], // Expanded for future types
+    enum: ["ADMIN_GRANT", "AUTO_GRANT", "MANUAL_OVERRIDE", "FINANCE_GRANT"], // Expanded for future types
     required: true,
   },
   startDate: {
@@ -98,6 +98,27 @@ const enrollmentSchema = new mongoose.Schema(
       approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       newDueDate: Date,
     },
+
+    financeGraceDaysUsed: {
+      type: Number,
+      default: 0,
+    },
+
+    // Extension history (har grant ka record)
+    accessOverrideHistory: [
+      {
+        type: {
+          type: String,
+          enum: ["ADMIN_GRANT", "FINANCE_GRANT"],
+        },
+        durationDays: Number,
+        reason: String,
+        startDate: Date,
+        endDate: Date,
+        grantedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        createdAt: { type: Date, default: Date.now },
+      }
+    ],
 
     // ── Lead snapshot — pura lead data yahan store hoga ──────────
     // Jab advance pay hone pe lead delete hoti hai toh
