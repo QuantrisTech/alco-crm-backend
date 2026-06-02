@@ -12,12 +12,14 @@ const {
 
 // ─── Import your existing auth protect middleware ───
 // Adjust path according to your project structure
-const { protect } = require("../middleware/authMiddleware");
+const { protect }   = require("../middlewares/authMiddleware");
+const { authorize } = require("../middlewares/roleMiddleware");
 
 // ─── SEO-specific role guards ───
-const { seoAccess, superAdminOnly } = require("../middleware/seoAuth");
+// const { seoAccess, superAdminOnly } = require("../middleware/seoAuth");
 
-
+const isAdmin = authorize("admin", "super_admin");
+const isSeo = authorize("seo", "admin", "super_admin");
 // ══════════════════════════════════════════════
 // PUBLIC ROUTES — Frontend fetch karta hai
 // ══════════════════════════════════════════════
@@ -31,19 +33,19 @@ router.get("/page/:pageSlug", getSeoBySlug);
 // ══════════════════════════════════════════════
 
 // GET  /api/v1/seo              → all pages SEO list
-router.get("/", protect, seoAccess, getAllSeo);
+router.get("/", protect, isSeo, getAllSeo);
 
 // POST /api/v1/seo              → create new SEO entry
-router.post("/", protect, seoAccess, createSeo);
+router.post("/", protect, isSeo, createSeo);
 
 // PUT  /api/v1/seo/:pageSlug    → update by slug
-router.put("/:pageSlug", protect, seoAccess, updateSeo);
+router.put("/:pageSlug", protect, isSeo, updateSeo);
 
 // PATCH /api/v1/seo/upsert      → upsert (create or update)
-router.patch("/upsert", protect, seoAccess, upsertSeo);
+router.patch("/upsert", protect, isSeo, upsertSeo);
 
 // DELETE /api/v1/seo/:pageSlug  → superadmin only
-router.delete("/:pageSlug", protect, superAdminOnly, deleteSeo);
+router.delete("/:pageSlug", protect, isAdmin, deleteSeo);
 
 
 module.exports = router;

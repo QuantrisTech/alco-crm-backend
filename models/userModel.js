@@ -70,6 +70,7 @@ const userSchema = new mongoose.Schema(
         "support",
         "finance_manager",
         "instructor",
+        "seo",
         "user"
       ],
       default: "user",
