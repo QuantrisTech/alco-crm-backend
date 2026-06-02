@@ -88,7 +88,7 @@ const userSchema = new mongoose.Schema(
     source: {
       type: String,
       enum: ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact",
-        "webinar", "frontforce", "lms", "crm", "other"],
+        "webinar", "frontforce", "lms", "crm", "resource", "other"],
       default: "enroll"
     },
 
