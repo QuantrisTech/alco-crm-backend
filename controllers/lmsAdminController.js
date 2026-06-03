@@ -276,7 +276,7 @@ exports.adminDeleteResource = async (req, res) => {
 exports.adminGetPublicResources = async (req, res) => {
   try {
     const resources = await Resource.find({ is_public: true })
-      .select("title description cover_image_url")
+      .select("title description cover_image_url file_url is_available") // ← is_available add karo
       .sort({ createdAt: -1 });
     res.json({ success: true, data: resources });
   } catch (err) {
