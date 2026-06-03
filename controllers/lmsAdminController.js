@@ -9,7 +9,7 @@ const sendEmail = require("../utils/sendEmailDynamic");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
 const bcrypt = require("bcryptjs");
-const { generateColor } = require("../utils/generateColor");
+const generateColor = require("../utils/generateColor.js");
 const { notifyBookRequested } = require("../config/notificationService");
 
 // ── Helper: Cloudinary upload ─────────────────────────────────
