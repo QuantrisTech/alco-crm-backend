@@ -36,8 +36,8 @@ exports.createEnrollment = async (req, res) => {
       user,
       program,
       batch,
-      paymentPlan, // Save payment plan details
-      status: "Pending" // Set initial status to Pending
+      // paymentPlan, // Save payment plan details
+      // status: "Pending" // Set initial status to Pending
     });
 
     res.status(201).json({
