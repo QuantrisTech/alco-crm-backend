@@ -268,7 +268,7 @@
 //   deleteSeo,
 //   upsertSeo,
 // };
-const SeoMeta = require("../models/seoMetaModel");
+const SeoMeta = require("../models/seoMetaModal");
 
 // PUBLIC — Frontend use karta hai
 // GET /api/v1/seo/page/:pageSlug
