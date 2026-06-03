@@ -192,11 +192,10 @@ exports.adminCreateResource = async (req, res) => {
 
     // ── PDF upload ────────────────────────────────────────────
     const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
-      folder:        "alco/resources/pdfs",
-      resource_type: "raw",
-      format:        "pdf",
-      headers:       "Content-Type: application/pdf",  // ← ADD THIS
-    });
+  folder:        "alco/resources/pdfs",
+  resource_type: "auto",   // ← auto detects PDF correctly
+  format:        "pdf",
+});
 
     // ── Cover image upload ────────────────────────────────────
     let cover_image_url = "";
