@@ -32,8 +32,9 @@ const resourceSchema = new mongoose.Schema(
     title:           { type: String, required: true },
     description:     { type: String },
     cover_image_url: { type: String },   // Cloudinary image
-    file_url:        { type: String, required: true }, // Cloudinary PDF
+    file_url:        { type: String}, // Cloudinary PDF
     is_public:       { type: Boolean, default: true },
+    is_available:    { type: Boolean, default: true }, 
     uploaded_by:     { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

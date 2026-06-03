@@ -186,19 +186,25 @@ exports.adminGetResourceById = async (req, res) => {
 
 exports.adminCreateResource = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, is_available } = req.body;
     if (!title) return res.status(400).json({ success: false, message: "Title required" });
-    if (!req.files?.pdf?.[0]) return res.status(400).json({ success: false, message: "PDF required" });
+    
+    const isAvailable = is_available === "true" || is_available === true;
+    
+    // PDF only required if is_available = true
+    if (isAvailable && !req.files?.pdf?.[0]) {
+      return res.status(400).json({ success: false, message: "PDF required when resource is available" });
+    }
 
-    // ── PDF upload ────────────────────────────────────────────
-    const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
-      folder: "alco/resources/pdfs",
-      resource_type: "auto",
-      format: "pdf",
-      public_id: `pdf_${Date.now()}`,
-    });
+    let file_url = "";
+    if (req.files?.pdf?.[0]) {
+      const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
+        folder: "alco/resources/pdfs",
+        resource_type: "auto",
+      });
+      file_url = pdfResult.secure_url;
+    }
 
-    // ── Cover image upload ────────────────────────────────────
     let cover_image_url = "";
     if (req.files?.image?.[0]) {
       const imgResult = await uploadToCloudinary(req.files.image[0].buffer, {
@@ -209,10 +215,8 @@ exports.adminCreateResource = async (req, res) => {
     }
 
     const resource = await Resource.create({
-      title,
-      description,
-      file_url: pdfResult.secure_url,
-      cover_image_url,
+      title, description, file_url,
+      cover_image_url, is_available: isAvailable,
       uploaded_by: req.user.id,
     });
 
