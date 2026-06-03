@@ -193,7 +193,7 @@ exports.adminCreateResource = async (req, res) => {
     // ── PDF upload ────────────────────────────────────────────
     const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
       folder: "alco/resources/pdfs",
-      resource_type: "raw",
+      resource_type: "auto",
       format: "pdf",
       public_id: `pdf_${Date.now()}`,
     });
@@ -234,7 +234,7 @@ exports.adminUpdateResource = async (req, res) => {
     if (req.files?.pdf?.[0]) {
       const result = await uploadToCloudinary(req.files.pdf[0].buffer, {
         folder: "alco/resources/pdfs",
-        resource_type: "raw",
+        resource_type: "auto",
         format: "pdf",
         public_id: `pdf_${Date.now()}`,
       });
