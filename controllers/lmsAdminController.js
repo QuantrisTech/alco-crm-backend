@@ -190,9 +190,9 @@ exports.adminCreateResource = async (req, res) => {
   try {
     const { title, description, is_available } = req.body;
     if (!title) return res.status(400).json({ success: false, message: "Title required" });
-    
+
     const isAvailable = is_available === "true" || is_available === true;
-    
+
     // PDF only required if is_available = true
     if (isAvailable && !req.files?.pdf?.[0]) {
       return res.status(400).json({ success: false, message: "PDF required when resource is available" });
@@ -368,7 +368,7 @@ exports.requestBook = async (req, res) => {
         isVerified: true,
         isTemporaryPassword: true,
         avatarColor,
-         source: "resource",  // ✅ source track
+        source: "resource",  // ✅ source track
       });
 
       // ── Credentials email ────────────────────────────────────
