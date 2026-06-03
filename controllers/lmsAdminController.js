@@ -1,12 +1,12 @@
 // controllers/lmsAdminController.js
-const Assignment = require("../models/assignmentModel");
-const Submission = require("../models/submissionModel");
+const Assignment  = require("../models/assignmentModel");
+const Submission  = require("../models/submissionModel");
 const LiveSession = require("../models/liveSessionModel");
-const Resource = require("../models/resourceModel");
-const Lead = require("../models/leadModel");
-const User = require("../models/userModel");
-const sendEmail = require("../utils/sendEmail");
-const cloudinary = require("../config/cloudinary");
+const Resource    = require("../models/resourceModel");
+const Lead        = require("../models/leadModel");
+const User        = require("../models/userModel");
+const sendEmail   = require("../utils/sendEmail");
+const cloudinary  = require("../config/cloudinary");
 const streamifier = require("streamifier");
 const { notifyBookRequested } = require("./notificationController");
 
@@ -30,8 +30,8 @@ exports.adminGetAssignments = async (req, res) => {
     const { program_id, course_id, status } = req.query;
     const filter = {};
     if (program_id) filter.program_id = program_id;
-    if (course_id) filter.course_id = course_id;
-    if (status) filter.status = status;
+    if (course_id)  filter.course_id  = course_id;
+    if (status)     filter.status     = status;
 
     const assignments = await Assignment.find(filter)
       .populate("program_id", "name")
@@ -81,7 +81,7 @@ exports.adminGetLiveSessions = async (req, res) => {
     const { program_id, status } = req.query;
     const filter = {};
     if (program_id) filter.program_id = program_id;
-    if (status) filter.status = status;
+    if (status)     filter.status     = status;
 
     const sessions = await LiveSession.find(filter)
       .populate("program_id", "name")
@@ -147,6 +147,43 @@ exports.adminGetResourceById = async (req, res) => {
   }
 };
 
+// exports.adminCreateResource = async (req, res) => {
+//   try {
+//     const { title, description } = req.body;
+//     if (!title) return res.status(400).json({ success: false, message: "Title required" });
+//     if (!req.files?.pdf?.[0]) return res.status(400).json({ success: false, message: "PDF required" });
+
+//     // ── PDF upload ────────────────────────────────────────────
+//     const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
+//       folder:        "alco/resources/pdfs",
+//       resource_type: "raw",
+//       format:        "pdf",
+//     });
+
+//     // ── Cover image upload (optional) ─────────────────────────
+//     let cover_image_url = "";
+//     if (req.files?.image?.[0]) {
+//       const imgResult = await uploadToCloudinary(req.files.image[0].buffer, {
+//         folder:        "alco/resources/covers",
+//         resource_type: "image",
+//       });
+//       cover_image_url = imgResult.secure_url;
+//     }
+
+//     const resource = await Resource.create({
+//       title,
+//       description,
+//       file_url:        pdfResult.secure_url,
+//       cover_image_url,
+//       uploaded_by:     req.user.id,
+//     });
+
+//     res.status(201).json({ success: true, data: resource });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 exports.adminCreateResource = async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -155,19 +192,17 @@ exports.adminCreateResource = async (req, res) => {
 
     // ── PDF upload ────────────────────────────────────────────
     const pdfResult = await uploadToCloudinary(req.files.pdf[0].buffer, {
-      folder: "alco/resources/pdfs",
+      folder:        "alco/resources/pdfs",
       resource_type: "raw",
-      format: "pdf",
-      type: "upload",
-      access_mode: "public",
-      headers: "Content-Type: application/pdf\nContent-Disposition: inline",
+      format:        "pdf",
+      headers:       "Content-Type: application/pdf",  // ← ADD THIS
     });
 
-    // ── Cover image upload (optional) ─────────────────────────
+    // ── Cover image upload ────────────────────────────────────
     let cover_image_url = "";
     if (req.files?.image?.[0]) {
       const imgResult = await uploadToCloudinary(req.files.image[0].buffer, {
-        folder: "alco/resources/covers",
+        folder:        "alco/resources/covers",
         resource_type: "image",
       });
       cover_image_url = imgResult.secure_url;
@@ -176,9 +211,9 @@ exports.adminCreateResource = async (req, res) => {
     const resource = await Resource.create({
       title,
       description,
-      file_url: pdfResult.secure_url,
+      file_url:        pdfResult.secure_url,
       cover_image_url,
-      uploaded_by: req.user.id,
+      uploaded_by:     req.user.id,
     });
 
     res.status(201).json({ success: true, data: resource });
@@ -193,21 +228,21 @@ exports.adminUpdateResource = async (req, res) => {
     if (!resource) return res.status(404).json({ success: false, message: "Not found" });
 
     const { title, description } = req.body;
-    if (title) resource.title = title;
+    if (title)       resource.title       = title;
     if (description) resource.description = description;
 
     if (req.files?.pdf?.[0]) {
       const result = await uploadToCloudinary(req.files.pdf[0].buffer, {
-        folder: "alco/resources/pdfs",
+        folder:        "alco/resources/pdfs",
         resource_type: "raw",
-        format: "pdf",
+        format:        "pdf",
       });
       resource.file_url = result.secure_url;
     }
 
     if (req.files?.image?.[0]) {
       const result = await uploadToCloudinary(req.files.image[0].buffer, {
-        folder: "alco/resources/covers",
+        folder:        "alco/resources/covers",
         resource_type: "image",
       });
       resource.cover_image_url = result.secure_url;
@@ -313,47 +348,47 @@ exports.requestBook = async (req, res) => {
 
     if (!user) {
       // ── Naya user banao ──────────────────────────────────────
-      const tempPassword = Math.random().toString(36).slice(-8); // e.g. "x4k9mz2q"
+      const tempPassword   = Math.random().toString(36).slice(-8); // e.g. "x4k9mz2q"
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
-      const avatarColor = generateColor(email); // tumhara existing helper
+      const avatarColor    = generateColor(email); // tumhara existing helper
 
       user = await User.create({
-        name: `${first_name} ${last_name || ""}`.trim(),
+        name:                `${first_name} ${last_name || ""}`.trim(),
         email,
         phone,
-        password: hashedPassword,
-        role: "user",
-        isVerified: true,
+        password:            hashedPassword,
+        role:                "user",
+        isVerified:          true,
         isTemporaryPassword: true,
         avatarColor,
-        source: `resource-${resource._id}`, // ✅ source track
+        source:              `resource-${resource._id}`, // ✅ source track
       });
 
       // ── Credentials email ────────────────────────────────────
       await sendEmail({
-        to: email,
-        subject: "Your Account Credentials 🔑",
+        to:           email,
+        subject:      "Your Account Credentials 🔑",
         templateName: "send-user-credentials",
         replacements: {
-          UserName: first_name,
-          UserEmail: email,
-          UserPassword: tempPassword,
-          SupportEmail: "alco@support.com",
+          UserName:        first_name,
+          UserEmail:       email,
+          UserPassword:    tempPassword,
+          SupportEmail:    "alco@support.com",
           YourCompanyName: "Al-and-co",
-          LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${tempPassword}`,
+          LoginLink:       `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${tempPassword}`,
         },
       });
     }
 
     // ── Book delivery email (sab ko — new ya existing) ────────
     await sendEmail({
-      to: email,
-      subject: `📖 Your Book: ${resource.title}`,
+      to:           email,
+      subject:      `📖 Your Book: ${resource.title}`,
       templateName: "book-delivery",
       replacements: {
-        UserName: first_name,
+        UserName:  first_name,
         BookTitle: resource.title,
-        BookUrl: resource.file_url,
+        BookUrl:   resource.file_url,
       },
     });
 
@@ -361,11 +396,11 @@ exports.requestBook = async (req, res) => {
     const superAdmin = await User.findOne({ role: "super_admin" }).select("_id");
     if (superAdmin) {
       await notifyBookRequested({
-        adminId: superAdmin._id,
-        userName: `${first_name} ${last_name || ""}`.trim(),
+        adminId:   superAdmin._id,
+        userName:  `${first_name} ${last_name || ""}`.trim(),
         bookTitle: resource.title,
-        leadId: null,
-      }).catch(() => { });
+        leadId:    null,
+      }).catch(() => {});
     }
 
     res.json({ success: true, message: "Book sent to your email!" });
