@@ -8,7 +8,9 @@ const User = require("../models/userModel");
 const sendEmail = require("../utils/sendEmailDynamic");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
-const { notifyBookRequested } = require("./notificationController");
+const bcrypt = require("bcryptjs");
+const { generateColor } = require("../utils/generateColor");
+const { notifyBookRequested } = require("../config/notificationService");
 
 // ── Helper: Cloudinary upload ─────────────────────────────────
 const uploadToCloudinary = (buffer, options) => {
