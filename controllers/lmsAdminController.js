@@ -368,7 +368,7 @@ exports.requestBook = async (req, res) => {
         isVerified: true,
         isTemporaryPassword: true,
         avatarColor,
-        source: `resource-${resource._id}`, // ✅ source track
+         source: "resource",  // ✅ source track
       });
 
       // ── Credentials email ────────────────────────────────────
