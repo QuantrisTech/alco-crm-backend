@@ -15,6 +15,10 @@ const {
 
 const isAdmin = authorize("admin", "super_admin");
 
+// ✅ Public routes PEHLE — no auth
+router.get("/resources/public",          adminGetPublicResources);
+router.post("/resources/:id/request",    requestBook);
+
 // ─── Assignments ──────────────────────────────────────────────
 router.get("/assignments",           protect, isAdmin, adminGetAssignments);
 router.post("/assignments",          protect, isAdmin, adminCreateAssignment);
@@ -43,8 +47,5 @@ router.delete("/resources/:id",      protect, isAdmin, adminDeleteResource);
 // ─── Resources — LMS (any logged-in user) ────────────────────
 router.get   ("/resources/all",      protect, lmsGetResources);
 
-// Public routes for resources (no auth)
-router.get   ("/resources/public",   adminGetPublicResources);
-router.post  ("/resources/:id/request", requestBook);
 
 module.exports = router;
