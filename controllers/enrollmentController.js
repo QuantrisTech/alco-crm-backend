@@ -96,57 +96,123 @@ exports.getMyEnrollments = async (req, res) => {
 //   }
 // };
 // ALL ENROLLMENTS (ADMIN) — grouped by user
+// exports.getAllEnrollments = async (req, res) => {
+//   try {
+//     const page = Number(req.query.page) || 1;
+//     const limit = Number(req.query.limit) || 10;
+
+//     // Step 1: Pehle unique users count karo pagination ke liye
+//     const uniqueUsers = await Enrollment.distinct("user");
+//     const total = uniqueUsers.length;
+
+//     // Step 2: Paginated unique user IDs nikalo
+//     const paginatedUserIds = uniqueUsers.slice(
+//       (page - 1) * limit,
+//       page * limit
+//     );
+
+//     // Step 3: Sirf un users ki enrollments fetch karo
+//     const enrollments = await Enrollment.find({
+//       user: { $in: paginatedUserIds },
+//     })
+//       .populate("user program batch")
+//       .sort({ createdAt: -1 });
+
+//     // Step 4: Group by user
+//     const groupedMap = {};
+
+//     for (const enrollment of enrollments) {
+//       const userId = enrollment.user?._id?.toString();
+//       if (!userId) continue;
+
+//       if (!groupedMap[userId]) {
+//         groupedMap[userId] = {
+//           user: enrollment.user,         // user object ek baar
+//           enrollments: [],               // programs array
+//         };
+//       }
+
+//       // Enrollment object se user hata do (duplicate avoid)
+//       const { user, ...enrollmentData } = enrollment.toObject();
+
+//       groupedMap[userId].enrollments.push(enrollmentData);
+//     }
+
+//     const data = Object.values(groupedMap);
+
+//     res.json({
+//       success: true,
+//       data,
+//       meta: {
+//         page,
+//         limit,
+//         total,                                    // total unique users
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 exports.getAllEnrollments = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
+    const { search, status } = req.query;
 
-    // Step 1: Pehle unique users count karo pagination ke liye
-    const uniqueUsers = await Enrollment.distinct("user");
-    const total = uniqueUsers.length;
+    // Step 1: Enrollment level filter (status)
+    const enrollmentFilter = {};
+    if (status) enrollmentFilter.status = status;
 
-    // Step 2: Paginated unique user IDs nikalo
-    const paginatedUserIds = uniqueUsers.slice(
-      (page - 1) * limit,
-      page * limit
-    );
-
-    // Step 3: Sirf un users ki enrollments fetch karo
-    const enrollments = await Enrollment.find({
-      user: { $in: paginatedUserIds },
-    })
+    // Step 2: Pehle sari matching enrollments fetch karo (populate ke saath)
+    const allEnrollments = await Enrollment.find(enrollmentFilter)
       .populate("user program batch")
       .sort({ createdAt: -1 });
 
+    // Step 3: Search filter — user name, email, phone pe
+    const filtered = search
+      ? allEnrollments.filter((e) => {
+          const q = search.toLowerCase();
+          return (
+            e.user?.name?.toLowerCase().includes(q) ||
+            e.user?.email?.toLowerCase().includes(q) ||
+            e.user?.phone?.toLowerCase().includes(q) ||
+            e.program?.name?.toLowerCase().includes(q)
+          );
+        })
+      : allEnrollments;
+
     // Step 4: Group by user
     const groupedMap = {};
-
-    for (const enrollment of enrollments) {
+    for (const enrollment of filtered) {
       const userId = enrollment.user?._id?.toString();
       if (!userId) continue;
 
       if (!groupedMap[userId]) {
         groupedMap[userId] = {
-          user: enrollment.user,         // user object ek baar
-          enrollments: [],               // programs array
+          user: enrollment.user,
+          enrollments: [],
         };
       }
 
-      // Enrollment object se user hata do (duplicate avoid)
       const { user, ...enrollmentData } = enrollment.toObject();
-
       groupedMap[userId].enrollments.push(enrollmentData);
     }
 
-    const data = Object.values(groupedMap);
+    const allGrouped = Object.values(groupedMap);
+
+    // Step 5: Pagination — grouped users pe
+    const total = allGrouped.length;
+    const paginated = allGrouped.slice((page - 1) * limit, page * limit);
 
     res.json({
       success: true,
-      data,
+      data: paginated,
       meta: {
         page,
         limit,
-        total,                                    // total unique users
+        total,
         totalPages: Math.ceil(total / limit),
       },
     });
