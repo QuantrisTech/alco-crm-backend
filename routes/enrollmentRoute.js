@@ -12,6 +12,7 @@ const {
   graduateEnrollment,
   suspendEnrollment,
   reactivateEnrollment,
+  assignEnrollment,
 } = require("../controllers/enrollmentController");
 
 const { protect } = require("../middlewares/authMiddleware");
@@ -36,5 +37,7 @@ router.post("/:id/graduate", protect, authorize("admin", "super_admin"), graduat
 router.post("/:id/suspend", protect, authorize("admin", "super_admin"), suspendEnrollment);
 
 router.post("/:id/reactivate", protect, authorize("admin", "super_admin"), reactivateEnrollment);
+
+router.patch("/:id/assign", protect, assignEnrollment);
 
 module.exports = router;

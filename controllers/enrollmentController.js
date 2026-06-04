@@ -331,3 +331,22 @@ exports.reactivateEnrollment = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.assignEnrollment = async (req, res) => {
+  const { assigned_to } = req.body;
+
+  const enrollment = await Enrollment.findByIdAndUpdate(
+    req.params.id,
+    {
+      assigned_to,
+    },
+    { new: true }
+  )
+    .populate("assigned_to", "name email")
+    .populate("user", "name email");
+
+  res.status(200).json({
+    success: true,
+    data: enrollment,
+  });
+};
