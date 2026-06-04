@@ -15,13 +15,13 @@ exports.createEnrollment = async (req, res) => {
     // }
     const { user, program, batch } = req.body; // Include paymentPlan
 
-    if (!user || !program ) {
+    if (!user || !program) {
       return res.status(400).json({
         success: false,
         message: "User, Program, and Payment Plan are required",
       });
     }
-    
+
 
     const existing = await Enrollment.findOne({ user, program });
 
@@ -166,21 +166,27 @@ exports.getAllEnrollments = async (req, res) => {
     if (status) enrollmentFilter.status = status;
 
     // Step 2: Pehle sari matching enrollments fetch karo (populate ke saath)
+    // const allEnrollments = await Enrollment.find(enrollmentFilter)
+    //   .populate("user program batch")
+    //   .sort({ createdAt: -1 });
     const allEnrollments = await Enrollment.find(enrollmentFilter)
-      .populate("user program batch")
+      .populate("user", "name email phone role")
+      .populate("program")
+      .populate("batch")
+      .populate("assigned_to", "name email role")
       .sort({ createdAt: -1 });
 
     // Step 3: Search filter — user name, email, phone pe
     const filtered = search
       ? allEnrollments.filter((e) => {
-          const q = search.toLowerCase();
-          return (
-            e.user?.name?.toLowerCase().includes(q) ||
-            e.user?.email?.toLowerCase().includes(q) ||
-            e.user?.phone?.toLowerCase().includes(q) ||
-            e.program?.name?.toLowerCase().includes(q)
-          );
-        })
+        const q = search.toLowerCase();
+        return (
+          e.user?.name?.toLowerCase().includes(q) ||
+          e.user?.email?.toLowerCase().includes(q) ||
+          e.user?.phone?.toLowerCase().includes(q) ||
+          e.program?.name?.toLowerCase().includes(q)
+        );
+      })
       : allEnrollments;
 
     // Step 4: Group by user
