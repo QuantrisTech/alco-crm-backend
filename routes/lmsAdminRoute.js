@@ -14,6 +14,7 @@ const {
 } = require("../controllers/lmsAdminController");
 
 const isAdmin = authorize("admin", "super_admin");
+const isAdminAndSeo = authorize("admin", "super_admin", "seo");
 
 // ✅ Public routes PEHLE — no auth
 router.get("/resources/public",          adminGetPublicResources);
@@ -38,11 +39,11 @@ router.delete("/live-sessions/:id",  protect, isAdmin, adminDeleteLiveSession);
 // router.delete("/resources/:id",      protect, isAdmin, adminDeleteResource);
 
 // ── Admin CRUD ───────────────────────────────────────────────
-router.get   ("/resources",          protect, isAdmin, adminGetResources);
-router.get   ("/resources/:id",      protect, isAdmin, adminGetResourceById);
-router.post  ("/resources",          protect, isAdmin, uploadResourceFiles, adminCreateResource);
-router.put   ("/resources/:id",      protect, isAdmin, uploadResourceFiles, adminUpdateResource);
-router.delete("/resources/:id",      protect, isAdmin, adminDeleteResource);
+router.get   ("/resources",          protect, isAdminAndSeo, adminGetResources);
+router.get   ("/resources/:id",      protect, isAdminAndSeo, adminGetResourceById);
+router.post  ("/resources",          protect, isAdminAndSeo, uploadResourceFiles, adminCreateResource);
+router.put   ("/resources/:id",      protect, isAdminAndSeo, uploadResourceFiles, adminUpdateResource);
+router.delete("/resources/:id",      protect, isAdminAndSeo, adminDeleteResource);
 
 // ─── Resources — LMS (any logged-in user) ────────────────────
 router.get   ("/resources/all",      protect, lmsGetResources);
