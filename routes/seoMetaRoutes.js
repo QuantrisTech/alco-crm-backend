@@ -19,7 +19,7 @@ const { authorize } = require("../middlewares/roleMiddleware");
 // const { seoAccess, superAdminOnly } = require("../middleware/seoAuth");
 
 const isAdmin = authorize("admin", "super_admin");
-const isSeo = authorize("seo", "admin", "super_admin");
+const isSeoAndAdmin = authorize("seo", "admin", "super_admin");
 // ══════════════════════════════════════════════
 // PUBLIC ROUTES — Frontend fetch karta hai
 // ══════════════════════════════════════════════
@@ -33,16 +33,16 @@ router.get("/page/:pageSlug", getSeoBySlug);
 // ══════════════════════════════════════════════
 
 // GET  /api/v1/seo              → all pages SEO list
-router.get("/", protect, isSeo, getAllSeo);
+router.get("/", protect, isSeoAndAdmin, getAllSeo);
 
 // POST /api/v1/seo              → create new SEO entry
-router.post("/", protect, isSeo, createSeo);
+router.post("/", protect, isSeoAndAdmin, createSeo);
 
 // PUT  /api/v1/seo/:pageSlug    → update by slug
-router.put("/:pageSlug", protect, isSeo, updateSeo);
+router.put("/:pageSlug", protect, isSeoAndAdmin, updateSeo);
 
 // PATCH /api/v1/seo/upsert      → upsert (create or update)
-router.patch("/upsert", protect, isSeo, upsertSeo);
+router.patch("/upsert", protect, isSeoAndAdmin, upsertSeo);
 
 // DELETE /api/v1/seo/:pageSlug  → superadmin only
 router.delete("/:pageSlug", protect, isAdmin, deleteSeo);
