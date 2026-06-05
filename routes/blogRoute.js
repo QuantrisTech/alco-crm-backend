@@ -49,11 +49,11 @@ router.get("/public", getBlogs);
 router.get("/public/:slug", getBlogBySlug);
 
 // Admin
-router.get("/admin/:slug", protect, authorize("super_admin", "admin"), adminGetBlogBySlug);
-router.get("/", protect, authorize("super_admin", "admin"), adminGetBlogs);
-router.post("", protect, authorize("super_admin", "admin"), adminCreateBlog);
-router.put("/:id", protect, authorize("super_admin", "admin"), adminUpdateBlog);
-router.delete("/:id", protect, authorize("super_admin", "admin"), adminDeleteBlog);
-router.post("/:id/publish", protect, authorize("super_admin", "admin"), adminPublishBlog);
+router.get("/admin/:slug", protect, authorize("super_admin", "admin", "seo"), adminGetBlogBySlug);
+router.get("/", protect, authorize("super_admin", "admin", "seo"), adminGetBlogs);
+router.post("", protect, authorize("super_admin", "admin", "seo"), adminCreateBlog);
+router.put("/:id", protect, authorize("super_admin", "admin", "seo"), adminUpdateBlog);
+router.delete("/:id", protect, authorize("super_admin", "admin", "seo"), adminDeleteBlog);
+router.post("/:id/publish", protect, authorize("super_admin", "admin", "seo"), adminPublishBlog);
 
 module.exports = router;
