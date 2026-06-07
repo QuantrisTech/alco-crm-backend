@@ -1330,7 +1330,7 @@ exports.searchEnrollments = async (req, res) => {
         { name: { $regex: q, $options: "i" } },
         { email: { $regex: q, $options: "i" } },
       ],
-      role: "student",
+      role: "user",
     }).select("_id name email phone").limit(20);
 
     if (!users.length)
