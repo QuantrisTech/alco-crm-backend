@@ -36,6 +36,9 @@ const {
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
 
+
+router.get("/enrollments/search", protect, authorize("super_admin", "admin", "finance_manager"), searchEnrollments);
+
 // ─── INVOICE ROUTES ───────────────────────────────────────────
 router.post("/invoices", protect, authorize("finance_manager", "admin", "super_admin"), createInvoice);
 router.get("/invoices", protect, authorize("finance_manager", "admin", "super_admin"), getAllInvoices);
@@ -85,8 +88,6 @@ router.post("/extension", protect, authorize("finance_manager", "admin", "super_
 router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "super_admin"), getRevenueReport);
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
-
-router.get("/enrollments/search", protect, authorize("super_admin", "admin", "finance_manager"), searchEnrollments);
 
 
 module.exports = router;
