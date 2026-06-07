@@ -1316,6 +1316,40 @@ exports.getSalesRoleInvoices = async (req, res) => {
 };
 
 // SEARCH ENROLLMENTS — for manual invoice creation
+// exports.searchEnrollments = async (req, res) => {
+//   try {
+//     const { q } = req.query;
+//     if (!q || q.trim().length < 2)
+//       return res.status(400).json({ success: false, message: "Query too short" });
+
+//     // const User = require("../models/userModel.js");
+
+//     // Step 1: User name/email se match karo
+//     const users = await User.find({
+//       $or: [
+//         { name: { $regex: q, $options: "i" } },
+//         { email: { $regex: q, $options: "i" } },
+//       ],
+//       role: "user",
+//     }).select("_id name email phone").limit(20);
+
+//     if (!users.length)
+//       return res.json({ success: true, data: [] });
+
+//     const userIds = users.map((u) => u._id);
+
+//     // Step 2: In users ki enrollments fetch karo
+//     const enrollments = await Enrollment.find({ user: { $in: userIds } })
+//       .populate("user", "name email phone")
+//       .populate("program", "name")
+//       .populate("batch", "name start_date end_date")
+//       .sort({ createdAt: -1 });
+
+//     res.json({ success: true, data: enrollments });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.searchEnrollments = async (req, res) => {
   try {
     const { q } = req.query;
@@ -1324,28 +1358,31 @@ exports.searchEnrollments = async (req, res) => {
 
     // const User = require("../models/userModel.js");
 
-    // Step 1: User name/email se match karo
     const users = await User.find({
       $or: [
         { name: { $regex: q, $options: "i" } },
         { email: { $regex: q, $options: "i" } },
       ],
-      role: "user",
     }).select("_id name email phone").limit(20);
 
-    if (!users.length)
-      return res.json({ success: true, data: [] });
+    if (!users.length) return res.json({ success: true, data: [] });
 
-    const userIds = users.map((u) => u._id);
-
-    // Step 2: In users ki enrollments fetch karo
-    const enrollments = await Enrollment.find({ user: { $in: userIds } })
+    const enrollments = await Enrollment.find({ user: { $in: users.map(u => u._id) } })
       .populate("user", "name email phone")
       .populate("program", "name")
       .populate("batch", "name start_date end_date")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, data: enrollments });
+    // ── Har enrollment ke saath uski invoice bhi attach karo ──
+    const result = await Promise.all(
+      enrollments.map(async (enr) => {
+        const invoice = await Invoice.findOne({ enrollment: enr._id })
+          .select("_id invoiceNumber totalAmount paidAmount remainingAmount status installments dueDate");
+        return { ...enr.toObject(), invoice: invoice || null };
+      })
+    );
+
+    res.json({ success: true, data: result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
