@@ -17,10 +17,10 @@ const isAdmin = authorize("admin", "super_admin");
 const isAdminAndSeo = authorize("admin", "super_admin", "seo");
 
 // ✅ Public routes PEHLE — no auth
-router.get("/resources/public",          adminGetPublicResources);
-router.post("/resources/:id/request",    requestBook);
 router.post("/resources/add-book",        protect, isAdmin, adminAddBook);
 router.get("/user-books/:userId",         protect, getUserBooks);
+router.get("/resources/public",          adminGetPublicResources);
+router.post("/resources/:id/request",    requestBook);
 
 // ─── Assignments ──────────────────────────────────────────────
 router.get("/assignments",           protect, isAdmin, adminGetAssignments);
