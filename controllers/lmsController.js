@@ -9,6 +9,7 @@ const Assignment = require("../models/assignmentModel");
 const Submission = require("../models/submissionModel");
 const LiveSession = require("../models/liveSessionModel");
 const Resource = require("../models/resourceModel");
+const BookRequest = require("../models/bookRequestModel");
 
 // ─── Helper: enrollment verify karo ──────────────────────────
 async function verifyEnrollment(enrollmentId, userId) {
@@ -614,6 +615,24 @@ exports.instructorGradeSubmission = async (req, res) => {
     if (!submission) return res.status(404).json({ success: false, message: "Submission not found" });
 
     res.json({ success: true, data: submission });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+// GET /api/v1/lms/my-books
+exports.getMyBooks = async (req, res) => {
+  try {
+    const requests = await BookRequest.find({ user_id: req.user.id })
+      .populate("resource_id", "title description cover_image_url file_url")
+      .sort({ createdAt: -1 });
+
+    const books = requests
+      .filter((r) => r.resource_id) // deleted resources filter out
+      .map((r) => r.resource_id);
+
+    res.json({ success: true, data: books });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

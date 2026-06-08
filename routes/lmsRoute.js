@@ -7,6 +7,7 @@ const { authorize }  = require("../middlewares/roleMiddleware");
 
 const {
   // Student — Dashboard
+  getMyBooks,     
   getLearningDashboard,
   getCourseContent,
   getLessonContent,
@@ -26,7 +27,7 @@ const {
   getResources,
   getResourceDownloadUrl,
   getLessonComments,    
-  addLessonComment,     
+  addLessonComment,
 
 } = require("../controllers/lmsController");
 
@@ -38,6 +39,8 @@ const isStudent = authorize("user", "admin", "super_admin", "finance_manager");
 // ═══════════════════════════════════════════════════════════════
 
 // Dashboard
+router.get("/my-books", protect, isStudent, getMyBooks);
+
 router.get("/:enrollmentId",                                    protect, isStudent, getLearningDashboard);
 
 // Course content

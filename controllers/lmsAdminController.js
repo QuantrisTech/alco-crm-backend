@@ -5,6 +5,7 @@ const LiveSession = require("../models/liveSessionModel");
 const Resource = require("../models/resourceModel");
 const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
+const BookRequest = require("../models/bookRequestModel.js");
 const sendEmail = require("../utils/sendEmailDynamic");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
@@ -340,6 +341,81 @@ exports.adminGetPublicResources = async (req, res) => {
 // ═════════════════════════════════════════════════════════════
 
 
+// exports.requestBook = async (req, res) => {
+//   try {
+//     const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
+//     if (!resource) return res.status(404).json({ success: false, message: "Book not found" });
+
+//     const { first_name, last_name, email, phone } = req.body;
+//     if (!first_name || !email || !phone) {
+//       return res.status(400).json({ success: false, message: "first_name, email, phone required" });
+//     }
+
+//     // ── Check: user already exist karta hai? ─────────────────
+//     let user = await User.findOne({ email });
+
+//     if (!user) {
+//       // ── Naya user banao ──────────────────────────────────────
+//       const tempPassword = Math.random().toString(36).slice(-8); // e.g. "x4k9mz2q"
+//       const hashedPassword = await bcrypt.hash(tempPassword, 10);
+//       const avatarColor = generateColor(email); // tumhara existing helper
+
+//       user = await User.create({
+//         name: `${first_name} ${last_name || ""}`.trim(),
+//         email,
+//         phone,
+//         password: hashedPassword,
+//         role: "user",
+//         isVerified: true,
+//         isTemporaryPassword: true,
+//         avatarColor,
+//         source: "resource",  // ✅ source track
+//       });
+
+//       // ── Credentials email ────────────────────────────────────
+//       await sendEmail({
+//         to: email,
+//         subject: "Your Account Credentials 🔑",
+//         templateName: "send-user-credentials",
+//         replacements: {
+//           UserName: first_name,
+//           UserEmail: email,
+//           UserPassword: tempPassword,
+//           SupportEmail: "alco@support.com",
+//           YourCompanyName: "Al-and-co",
+//           LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${tempPassword}`,
+//         },
+//       });
+//     }
+
+//     // ── Book delivery email (sab ko — new ya existing) ────────
+//     await sendEmail({
+//       to: email,
+//       subject: `📖 Your Book: ${resource.title}`,
+//       templateName: "book-delivery",
+//       replacements: {
+//         UserName: first_name,
+//         BookTitle: resource.title,
+//         BookUrl: resource.file_url,
+//       },
+//     });
+
+//     // ── Super admin ko notify karo ────────────────────────────
+//     const superAdmin = await User.findOne({ role: "super_admin" }).select("_id");
+//     if (superAdmin) {
+//       await notifyBookRequested({
+//         adminId: superAdmin._id,
+//         userName: `${first_name} ${last_name || ""}`.trim(),
+//         bookTitle: resource.title,
+//         leadId: null,
+//       }).catch(() => { });
+//     }
+
+//     res.json({ success: true, message: "Book sent to your email!" });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.requestBook = async (req, res) => {
   try {
     const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
@@ -350,64 +426,70 @@ exports.requestBook = async (req, res) => {
       return res.status(400).json({ success: false, message: "first_name, email, phone required" });
     }
 
-    // ── Check: user already exist karta hai? ─────────────────
+    // ── User find ya create karo ──────────────────────────────
     let user = await User.findOne({ email });
+    let isNewUser = false;
 
     if (!user) {
-      // ── Naya user banao ──────────────────────────────────────
-      const tempPassword = Math.random().toString(36).slice(-8); // e.g. "x4k9mz2q"
+      isNewUser = true;
+      const tempPassword   = Math.random().toString(36).slice(-8);
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
-      const avatarColor = generateColor(email); // tumhara existing helper
 
       user = await User.create({
-        name: `${first_name} ${last_name || ""}`.trim(),
+        name:                `${first_name} ${last_name || ""}`.trim(),
         email,
         phone,
-        password: hashedPassword,
-        role: "user",
-        isVerified: true,
+        password:            hashedPassword,
+        role:                "user",
+        isVerified:          true,
         isTemporaryPassword: true,
-        avatarColor,
-        source: "resource",  // ✅ source track
+        source:              `resource-${resource._id}`,
       });
 
-      // ── Credentials email ────────────────────────────────────
+      // ── Credentials email ─────────────────────────────────
       await sendEmail({
-        to: email,
-        subject: "Your Account Credentials 🔑",
+        to:           email,
+        subject:      "Your Account Credentials 🔑",
         templateName: "send-user-credentials",
         replacements: {
-          UserName: first_name,
-          UserEmail: email,
-          UserPassword: tempPassword,
-          SupportEmail: "alco@support.com",
+          UserName:        first_name,
+          UserEmail:       email,
+          UserPassword:    tempPassword,
+          SupportEmail:    "alco@support.com",
           YourCompanyName: "Al-and-co",
-          LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${tempPassword}`,
+          LoginLink:       `${process.env.LMS_URL}/login`,
         },
       });
     }
 
-    // ── Book delivery email (sab ko — new ya existing) ────────
+    // ── BookRequest save karo (duplicate ignore) ──────────────
+    await BookRequest.findOneAndUpdate(
+      { user_id: user._id, resource_id: resource._id },
+      { user_id: user._id, resource_id: resource._id },
+      { upsert: true }
+    );
+
+    // ── Book delivery email ───────────────────────────────────
     await sendEmail({
-      to: email,
-      subject: `📖 Your Book: ${resource.title}`,
+      to:           email,
+      subject:      `📖 Your Book: ${resource.title}`,
       templateName: "book-delivery",
       replacements: {
-        UserName: first_name,
+        UserName:  first_name,
         BookTitle: resource.title,
-        BookUrl: resource.file_url,
+        BookUrl:   resource.file_url,
       },
     });
 
-    // ── Super admin ko notify karo ────────────────────────────
+    // ── Super admin notify ────────────────────────────────────
     const superAdmin = await User.findOne({ role: "super_admin" }).select("_id");
     if (superAdmin) {
       await notifyBookRequested({
-        adminId: superAdmin._id,
-        userName: `${first_name} ${last_name || ""}`.trim(),
+        adminId:   superAdmin._id,
+        userName:  `${first_name} ${last_name || ""}`.trim(),
         bookTitle: resource.title,
-        leadId: null,
-      }).catch(() => { });
+        leadId:    null,
+      }).catch(() => {});
     }
 
     res.json({ success: true, message: "Book sent to your email!" });
