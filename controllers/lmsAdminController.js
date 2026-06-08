@@ -276,10 +276,21 @@ exports.adminDeleteResource = async (req, res) => {
 // PUBLIC — Website books
 // ═════════════════════════════════════════════════════════════
 
+// exports.adminGetPublicResources = async (req, res) => {
+//   try {
+//     const resources = await Resource.find({ is_public: true })
+//       .select("title description cover_image_url file_url is_available") // ← is_available add karo
+//       .sort({ createdAt: -1 });
+//     res.json({ success: true, data: resources });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.adminGetPublicResources = async (req, res) => {
   try {
-    const resources = await Resource.find({ is_public: true })
-      .select("title description cover_image_url file_url is_available") // ← is_available add karo
+    // ✅ is_public filter hatao — sab public dikhao
+    const resources = await Resource.find()
+      .select("title description cover_image_url file_url is_available")
       .sort({ createdAt: -1 });
     res.json({ success: true, data: resources });
   } catch (err) {
@@ -418,7 +429,8 @@ exports.adminGetPublicResources = async (req, res) => {
 // };
 exports.requestBook = async (req, res) => {
   try {
-    const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
+    // const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
+    const resource = await Resource.findById(req.params.id);
     if (!resource) return res.status(404).json({ success: false, message: "Book not found" });
 
     const { first_name, last_name, email, phone } = req.body;
@@ -432,32 +444,32 @@ exports.requestBook = async (req, res) => {
 
     if (!user) {
       isNewUser = true;
-      const tempPassword   = Math.random().toString(36).slice(-8);
+      const tempPassword = Math.random().toString(36).slice(-8);
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
       user = await User.create({
-        name:                `${first_name} ${last_name || ""}`.trim(),
+        name: `${first_name} ${last_name || ""}`.trim(),
         email,
         phone,
-        password:            hashedPassword,
-        role:                "user",
-        isVerified:          true,
+        password: hashedPassword,
+        role: "user",
+        isVerified: true,
         isTemporaryPassword: true,
-        source:              `resource-${resource._id}`,
+        source: `resource-${resource._id}`,
       });
 
       // ── Credentials email ─────────────────────────────────
       await sendEmail({
-        to:           email,
-        subject:      "Your Account Credentials 🔑",
+        to: email,
+        subject: "Your Account Credentials 🔑",
         templateName: "send-user-credentials",
         replacements: {
-          UserName:        first_name,
-          UserEmail:       email,
-          UserPassword:    tempPassword,
-          SupportEmail:    "alco@support.com",
+          UserName: first_name,
+          UserEmail: email,
+          UserPassword: tempPassword,
+          SupportEmail: "alco@support.com",
           YourCompanyName: "Al-and-co",
-          LoginLink:       `${process.env.LMS_URL}/login`,
+          LoginLink: `${process.env.LMS_URL}/login`,
         },
       });
     }
@@ -471,13 +483,13 @@ exports.requestBook = async (req, res) => {
 
     // ── Book delivery email ───────────────────────────────────
     await sendEmail({
-      to:           email,
-      subject:      `📖 Your Book: ${resource.title}`,
+      to: email,
+      subject: `📖 Your Book: ${resource.title}`,
       templateName: "book-delivery",
       replacements: {
-        UserName:  first_name,
+        UserName: first_name,
         BookTitle: resource.title,
-        BookUrl:   resource.file_url,
+        BookUrl: resource.file_url,
       },
     });
 
@@ -485,11 +497,11 @@ exports.requestBook = async (req, res) => {
     const superAdmin = await User.findOne({ role: "super_admin" }).select("_id");
     if (superAdmin) {
       await notifyBookRequested({
-        adminId:   superAdmin._id,
-        userName:  `${first_name} ${last_name || ""}`.trim(),
+        adminId: superAdmin._id,
+        userName: `${first_name} ${last_name || ""}`.trim(),
         bookTitle: resource.title,
-        leadId:    null,
-      }).catch(() => {});
+        leadId: null,
+      }).catch(() => { });
     }
 
     res.json({ success: true, message: "Book sent to your email!" });
