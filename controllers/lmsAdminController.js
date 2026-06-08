@@ -508,3 +508,44 @@ exports.lmsGetResources = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// lmsAdminController.js mein add karo
+
+// GET /api/v1/learn/user-books/:userId — admin ke liye
+exports.getUserBooks = async (req, res) => {
+  try {
+    const requests = await BookRequest.find({ user_id: req.params.userId })
+      .populate("resource_id", "title cover_image_url")
+      .sort({ createdAt: -1 });
+
+    const books = requests
+      .filter((r) => r.resource_id)
+      .map((r) => r.resource_id);
+
+    res.json({ success: true, data: books });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/v1/lms/resources/add-book — admin manually book add kare
+exports.adminAddBook = async (req, res) => {
+  try {
+    const { userId, resourceId } = req.body;
+    if (!userId || !resourceId)
+      return res.status(400).json({ success: false, message: "userId and resourceId required" });
+
+    const resource = await Resource.findById(resourceId);
+    if (!resource) return res.status(404).json({ success: false, message: "Resource not found" });
+
+    // Duplicate check
+    const existing = await BookRequest.findOne({ user_id: userId, resource_id: resourceId });
+    if (existing) return res.status(409).json({ success: false, message: "Book already added" });
+
+    await BookRequest.create({ user_id: userId, resource_id: resourceId });
+
+    res.json({ success: true, message: "Book added successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
