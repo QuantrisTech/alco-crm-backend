@@ -220,6 +220,7 @@ const lmsAdminRoute = require("./routes/lmsAdminRoute.js");
 const blogRoute = require("./routes/blogRoute.js");
 const seoRoute = require("./routes/seoMetaRoutes.js");
 const notificationRoute = require("./routes/notificationRoute.js");
+const accountRoute = require("./routes/accountRoute.js");
 
 const connectDB = require("./config/db.js");
 
@@ -345,6 +346,9 @@ app.use("/api/v1/instructor", instructorRouter);
 app.use("/api/v1/lms", lmsAdminRoute);
 
 app.use("/api/v1/notifications", notificationRoute);
+
+// Admin Account Routes
+app.use("/api/v1/accounts", accountRoute);
 
 
 // ======================
