@@ -38,6 +38,6 @@ router.post("/:id/suspend", protect, authorize("admin", "super_admin"), suspendE
 
 router.post("/:id/reactivate", protect, authorize("admin", "super_admin"), reactivateEnrollment);
 
-router.patch("/:id/assign", protect, authorize("admin", "super_admin"), assignEnrollment);
+router.patch("/:id/assign", protect, authorize("admin", "super_admin", "sales_manager"), assignEnrollment);
 
 module.exports = router;
