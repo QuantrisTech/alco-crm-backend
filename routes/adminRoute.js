@@ -17,6 +17,6 @@ router.patch("/users/:id/change-password", protect, authorize("admin", "super_ad
 router.delete("/users/:id", protect, authorize("admin", "super_admin"), deleteUserById);
 router.delete("/users", protect, authorize("admin", "super_admin"), deleteAllUsers);
 router.post("/users", protect, authorize("admin", "super_admin"), createUser);
-router.patch("/users/:id/role", protect, authorize("admin", "super_admin"), assignRole);
+router.patch("/users/:id/role", protect, authorize("admin", "super_admin", "sales_manager"), assignRole);
 
 module.exports = router;
