@@ -7,23 +7,61 @@ const User = require("../models/userModel.js");
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
+ const { postPaymentJournal, postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 
 // ─────────────────────────────────────────────
 // INVOICE MANAGEMENT
 // ─────────────────────────────────────────────
 
 // CREATE INVOICE
+// exports.createInvoice = async (req, res) => {
+//   try {
+//     const { user, enrollment, totalAmount, dueDate, installments } = req.body;
+ 
+//     if (!user || !enrollment || !totalAmount) {
+//       return res.status(400).json({ success: false, message: "user, enrollment, totalAmount are required" });
+//     }
+ 
+//     const count = await Invoice.countDocuments();
+//     const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+ 
+//     const invoice = await Invoice.create({
+//       invoiceNumber,
+//       user,
+//       enrollment,
+//       totalAmount,
+//       remainingAmount: totalAmount,
+//       dueDate,
+//       installments: installments || [],
+//     });
+ 
+//     await logAudit({
+//       req,
+//       action: "INVOICE_CREATED",
+//       module: "finance",
+//       targetId: invoice._id,
+//       after: invoice.toObject(),
+//     });
+ 
+//     res.status(201).json({ success: true, data: invoice });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.createInvoice = async (req, res) => {
   try {
     const { user, enrollment, totalAmount, dueDate, installments } = req.body;
-
+ 
     if (!user || !enrollment || !totalAmount) {
-      return res.status(400).json({ success: false, message: "user, enrollment, totalAmount are required" });
+      return res.status(400).json({
+        success: false,
+        message: "user, enrollment, totalAmount are required",
+      });
     }
-
+ 
     const count = await Invoice.countDocuments();
     const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
-
+ 
     const invoice = await Invoice.create({
       invoiceNumber,
       user,
@@ -33,15 +71,23 @@ exports.createInvoice = async (req, res) => {
       dueDate,
       installments: installments || [],
     });
-
+ 
+    // ✅ AUTO JOURNAL — Receivable + Income
+    await postInvoiceJournal({
+      amount:      totalAmount,
+      invoiceId:   invoice._id,
+      userId:      req.user._id,
+      description: `Invoice ${invoiceNumber} created`,
+    });
+ 
     await logAudit({
       req,
-      action: "INVOICE_CREATED",
-      module: "finance",
+      action:   "INVOICE_CREATED",
+      module:   "finance",
       targetId: invoice._id,
-      after: invoice.toObject(),
+      after:    invoice.toObject(),
     });
-
+ 
     res.status(201).json({ success: true, data: invoice });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -135,168 +181,344 @@ exports.markInvoicePaid = async (req, res) => {
   }
 };
 
+// exports.markInstallmentPaid = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { invoiceId, installmentId } = req.params;
+//     const { method, referenceNumber, notes } = req.body;
+
+//     // ── Validate method ───────────────────────────────────────────
+//     if (!method) {
+//       await session.abortTransaction();
+//       return res.status(400).json({ success: false, message: "Payment method is required" });
+//     }
+
+//     if (["bank", "cheque"].includes(method) && !referenceNumber) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Reference number is required for bank/cheque payments"
+//       });
+//     }
+
+//     // ── Find invoice ──────────────────────────────────────────────
+//     const invoice = await Invoice.findById(invoiceId).session(session);
+//     if (!invoice)
+//       return res.status(404).json({ success: false, message: "Invoice not found" });
+
+//     // ── Find installment ──────────────────────────────────────────
+//     const installment = invoice.installments.id(installmentId);
+//     if (!installment)
+//       return res.status(404).json({ success: false, message: "Installment not found" });
+
+//     if (installment.status === "PAID")
+//       return res.status(400).json({ success: false, message: "Already paid" });
+
+//     const before = invoice.toObject();
+
+//     // ── Mark installment paid ─────────────────────────────────────
+//     installment.status = "PAID";
+//     installment.paidAmount = installment.amount;
+//     installment.method = method;
+//     installment.referenceNumber = referenceNumber || null;
+
+//     // ── Recalculate invoice totals ────────────────────────────────
+//     const totalPaid = invoice.installments.reduce(
+//       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
+//     );
+//     invoice.paidAmount = totalPaid;
+//     invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+//     invoice.status =
+//       invoice.remainingAmount === 0 ? "PAID"
+//         : totalPaid > 0 ? "PARTIAL"
+//           : "PENDING";
+
+//     await invoice.save({ session });
+
+//     // ── Payment record ────────────────────────────────────────────
+//     const payment = new Payment({
+//       invoice: invoice._id,
+//       enrollment: invoice.enrollment,
+//       user: invoice.user,
+//       amount: installment.amount,
+//       method,
+//       referenceNumber: referenceNumber || null,
+//       status: "approved",
+//       approvedBy: req.user._id,
+//       approvedAt: new Date(),
+//       receivedBy: req.user._id,
+//       notes: notes || `Payment for ${installment.label}`,
+//     });
+//     await payment.save({ session });
+
+//     // ── Audit log ─────────────────────────────────────────────────
+//     await logAudit({
+//       req,
+//       action: "INSTALLMENT_MARKED_PAID",
+//       module: "finance",
+//       targetId: invoice._id,
+//       before,
+//       after: invoice.toObject(),
+//     });
+
+//     let enrollmentActivated = false;
+//     let leadDeleted = false;
+
+//     // ── ADVANCE PAID — main logic ─────────────────────────────────
+//     if (installment.isAdvance) {
+
+//       // Overdue installments check (future pending = ok)
+//       const hasOverdue = invoice.installments.some(
+//         (inst) =>
+//           inst.status !== "PAID" &&
+//           inst.dueDate &&
+//           new Date(inst.dueDate) < new Date()
+//       );
+
+//       const enrollment = await Enrollment.findById(invoice.enrollment).populate('batch').session(session);
+
+//       if (enrollment && enrollment.accessStatus === "RESTRICTED" && !hasOverdue) {
+
+//         // ── 1. Find lead by user_id + program ─────────────────────
+//         // const lead = await Lead.findOne({
+//         //   user_id: enrollment.user,
+//         //   program_id: enrollment.program,
+//         //   status: "converted",
+//         // }).session(session);
+//         const lead = await Lead.findOneAndUpdate({
+//           user_id: enrollment.user,
+//           program_id: enrollment.program,
+//           status: "converted",
+//         }, { advance_paid: true }).session(session);
+
+//         if (lead) {
+//           // ── 2. Save full lead snapshot into enrollment ──────────
+//           enrollment.leadSnapshot = {
+//             paymentPlan: lead.paymentPlan || null,
+//             contractDetails: lead.contractDetails || null,
+//             source: lead.source || null,
+//             quality: lead.quality || null,
+//             opportunity_value: lead.opportunity_value || 0,
+//             notes: lead.notes || null,
+//             utm_source: lead.utm_source || null,
+//             utm_medium: lead.utm_medium || null,
+//             utm_campaign: lead.utm_campaign || null,
+//             lead_score: lead.lead_score || 0,
+//             activities: lead.activities || [],
+//             assigned_to: lead.assigned_to || null,
+//             created_by: lead.created_by || null,
+//             lead_id: lead._id,
+//           };
+
+//           // ── 3. Delete lead ──────────────────────────────────────
+//           await Lead.findByIdAndDelete(lead._id).session(session);
+//           leadDeleted = true;
+
+//           await logAudit({
+//             req,
+//             action: "LEAD_DELETED_AFTER_ENROLLMENT",
+//             module: "leads",
+//             targetId: lead._id,
+//             before: lead.toObject(),
+//             after: null,
+//           });
+//         }
+
+//         // ── 4. Activate enrollment ──────────────────────────────
+//         enrollment.accessStatus = "ACTIVE";
+//         await enrollment.save({ session });
+//         enrollmentActivated = true;
+
+//         await logAudit({
+//           req,
+//           action: "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
+//           module: "finance",
+//           targetId: enrollment._id,
+//           after: { accessStatus: "ACTIVE", leadDeleted },
+//         });
+//       }
+//     }
+
+//     await session.commitTransaction();
+
+//     return res.json({
+//       success: true,
+//       message: enrollmentActivated
+//         ? `Installment paid — Enrollment activated!${leadDeleted ? " Lead record deleted." : ""}`
+//         : "Installment marked as paid",
+//       data: invoice,
+//       enrollmentActivated,
+//       leadDeleted,
+//     });
+
+//   } catch (err) {
+//     await session.abortTransaction();
+//     console.error("markInstallmentPaid error:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   } finally {
+//     session.endSession();
+//   }
+// };
+
+// financeController.js mein add karo
+
+// ── Installment Edit ─────────────────────────────────────────────
 exports.markInstallmentPaid = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
+ 
   try {
     const { invoiceId, installmentId } = req.params;
     const { method, referenceNumber, notes } = req.body;
-
-    // ── Validate method ───────────────────────────────────────────
+ 
     if (!method) {
       await session.abortTransaction();
       return res.status(400).json({ success: false, message: "Payment method is required" });
     }
-
+ 
     if (["bank", "cheque"].includes(method) && !referenceNumber) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: "Reference number is required for bank/cheque payments"
+        message: "Reference number is required for bank/cheque payments",
       });
     }
-
-    // ── Find invoice ──────────────────────────────────────────────
+ 
     const invoice = await Invoice.findById(invoiceId).session(session);
     if (!invoice)
       return res.status(404).json({ success: false, message: "Invoice not found" });
-
-    // ── Find installment ──────────────────────────────────────────
+ 
     const installment = invoice.installments.id(installmentId);
     if (!installment)
       return res.status(404).json({ success: false, message: "Installment not found" });
-
+ 
     if (installment.status === "PAID")
       return res.status(400).json({ success: false, message: "Already paid" });
-
+ 
     const before = invoice.toObject();
-
-    // ── Mark installment paid ─────────────────────────────────────
-    installment.status = "PAID";
-    installment.paidAmount = installment.amount;
-    installment.method = method;
+ 
+    installment.status          = "PAID";
+    installment.paidAmount      = installment.amount;
+    installment.method          = method;
     installment.referenceNumber = referenceNumber || null;
-
-    // ── Recalculate invoice totals ────────────────────────────────
-    const totalPaid = invoice.installments.reduce(
+ 
+    const totalPaid             = invoice.installments.reduce(
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
     );
-    invoice.paidAmount = totalPaid;
-    invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+    invoice.paidAmount          = totalPaid;
+    invoice.remainingAmount     = Math.max(0, invoice.totalAmount - totalPaid);
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID"
-        : totalPaid > 0 ? "PARTIAL"
-          : "PENDING";
-
+      : totalPaid > 0               ? "PARTIAL"
+      : "PENDING";
+ 
     await invoice.save({ session });
-
-    // ── Payment record ────────────────────────────────────────────
+ 
+    // Payment record
     const payment = new Payment({
-      invoice: invoice._id,
-      enrollment: invoice.enrollment,
-      user: invoice.user,
-      amount: installment.amount,
+      invoice:         invoice._id,
+      enrollment:      invoice.enrollment,
+      user:            invoice.user,
+      amount:          installment.amount,
       method,
       referenceNumber: referenceNumber || null,
-      status: "approved",
-      approvedBy: req.user._id,
-      approvedAt: new Date(),
-      receivedBy: req.user._id,
-      notes: notes || `Payment for ${installment.label}`,
+      status:          "approved",
+      approvedBy:      req.user._id,
+      approvedAt:      new Date(),
+      receivedBy:      req.user._id,
+      notes:           notes || `Payment for ${installment.label}`,
     });
     await payment.save({ session });
-
-    // ── Audit log ─────────────────────────────────────────────────
+ 
+    // ✅ AUTO JOURNAL — Bank/Cash debit + Receivable credit
+    await postPaymentJournal({
+      amount:      installment.amount,
+      method,
+      paymentId:   payment._id,
+      userId:      req.user._id,
+      description: `Installment paid — ${installment.label} (${invoice.invoiceNumber})`,
+      session,
+    });
+ 
     await logAudit({
       req,
-      action: "INSTALLMENT_MARKED_PAID",
-      module: "finance",
+      action:   "INSTALLMENT_MARKED_PAID",
+      module:   "finance",
       targetId: invoice._id,
       before,
-      after: invoice.toObject(),
+      after:    invoice.toObject(),
     });
-
+ 
     let enrollmentActivated = false;
-    let leadDeleted = false;
-
-    // ── ADVANCE PAID — main logic ─────────────────────────────────
+    let leadDeleted         = false;
+ 
     if (installment.isAdvance) {
-
-      // Overdue installments check (future pending = ok)
       const hasOverdue = invoice.installments.some(
         (inst) =>
           inst.status !== "PAID" &&
           inst.dueDate &&
           new Date(inst.dueDate) < new Date()
       );
-
-      const enrollment = await Enrollment.findById(invoice.enrollment).populate('batch').session(session);
-
+ 
+      const enrollment = await Enrollment.findById(invoice.enrollment)
+        .populate("batch")
+        .session(session);
+ 
       if (enrollment && enrollment.accessStatus === "RESTRICTED" && !hasOverdue) {
-
-        // ── 1. Find lead by user_id + program ─────────────────────
-        // const lead = await Lead.findOne({
-        //   user_id: enrollment.user,
-        //   program_id: enrollment.program,
-        //   status: "converted",
-        // }).session(session);
-        const lead = await Lead.findOneAndUpdate({
-          user_id: enrollment.user,
-          program_id: enrollment.program,
-          status: "converted",
-        }, { advance_paid: true }).session(session);
-
+        const lead = await Lead.findOneAndUpdate(
+          { user_id: enrollment.user, program_id: enrollment.program, status: "converted" },
+          { advance_paid: true }
+        ).session(session);
+ 
         if (lead) {
-          // ── 2. Save full lead snapshot into enrollment ──────────
           enrollment.leadSnapshot = {
-            paymentPlan: lead.paymentPlan || null,
-            contractDetails: lead.contractDetails || null,
-            source: lead.source || null,
-            quality: lead.quality || null,
+            paymentPlan:       lead.paymentPlan       || null,
+            contractDetails:   lead.contractDetails   || null,
+            source:            lead.source            || null,
+            quality:           lead.quality           || null,
             opportunity_value: lead.opportunity_value || 0,
-            notes: lead.notes || null,
-            utm_source: lead.utm_source || null,
-            utm_medium: lead.utm_medium || null,
-            utm_campaign: lead.utm_campaign || null,
-            lead_score: lead.lead_score || 0,
-            activities: lead.activities || [],
-            assigned_to: lead.assigned_to || null,
-            created_by: lead.created_by || null,
-            lead_id: lead._id,
+            notes:             lead.notes             || null,
+            utm_source:        lead.utm_source        || null,
+            utm_medium:        lead.utm_medium        || null,
+            utm_campaign:      lead.utm_campaign      || null,
+            lead_score:        lead.lead_score        || 0,
+            activities:        lead.activities        || [],
+            assigned_to:       lead.assigned_to       || null,
+            created_by:        lead.created_by        || null,
+            lead_id:           lead._id,
           };
-
-          // ── 3. Delete lead ──────────────────────────────────────
+ 
           await Lead.findByIdAndDelete(lead._id).session(session);
           leadDeleted = true;
-
+ 
           await logAudit({
             req,
-            action: "LEAD_DELETED_AFTER_ENROLLMENT",
-            module: "leads",
+            action:   "LEAD_DELETED_AFTER_ENROLLMENT",
+            module:   "leads",
             targetId: lead._id,
-            before: lead.toObject(),
-            after: null,
+            before:   lead.toObject(),
+            after:    null,
           });
         }
-
-        // ── 4. Activate enrollment ──────────────────────────────
+ 
         enrollment.accessStatus = "ACTIVE";
         await enrollment.save({ session });
         enrollmentActivated = true;
-
+ 
         await logAudit({
           req,
-          action: "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
-          module: "finance",
+          action:   "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
+          module:   "finance",
           targetId: enrollment._id,
-          after: { accessStatus: "ACTIVE", leadDeleted },
+          after:    { accessStatus: "ACTIVE", leadDeleted },
         });
       }
     }
-
+ 
     await session.commitTransaction();
-
+ 
     return res.json({
       success: true,
       message: enrollmentActivated
@@ -306,7 +528,6 @@ exports.markInstallmentPaid = async (req, res) => {
       enrollmentActivated,
       leadDeleted,
     });
-
   } catch (err) {
     await session.abortTransaction();
     console.error("markInstallmentPaid error:", err);
@@ -315,10 +536,8 @@ exports.markInstallmentPaid = async (req, res) => {
     session.endSession();
   }
 };
+ 
 
-// financeController.js mein add karo
-
-// ── Installment Edit ─────────────────────────────────────────────
 exports.updateInstallment = async (req, res) => {
   try {
     const { invoiceId, installmentId } = req.params;
@@ -622,6 +841,93 @@ exports.approvePayment = async (req, res) => {
       enrollmentActivated: advancePaid,
     });
 
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+exports.approvePayment = async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment)
+      return res.status(404).json({ success: false, message: "Payment not found" });
+    if (payment.status === "approved")
+      return res.status(400).json({ success: false, message: "Already approved" });
+ 
+    const before = payment.toObject();
+ 
+    payment.status     = "approved";
+    payment.approvedBy = req.user.id;
+    payment.approvedAt = new Date();
+    await payment.save();
+ 
+    // ── Invoice update ────────────────────────────────────────
+    let advancePaid = false;
+ 
+    const invoice = await Invoice.findById(payment.invoice);
+    if (invoice) {
+      invoice.paidAmount      = (invoice.paidAmount || 0) + payment.amount;
+      invoice.remainingAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
+      invoice.status =
+        invoice.remainingAmount === 0 ? "PAID"
+        : invoice.paidAmount > 0      ? "PARTIAL"
+        : invoice.status;
+ 
+      const matchingInst = invoice.installments.find(
+        (inst) =>
+          inst.status === "PENDING" &&
+          Number(inst.amount) === Number(payment.amount)
+      );
+      if (matchingInst) {
+        matchingInst.status     = "PAID";
+        matchingInst.paidAmount = payment.amount;
+      }
+ 
+      await invoice.save();
+ 
+      const advanceInst = invoice.installments.find((inst) => inst.isAdvance === true);
+      advancePaid = advanceInst?.status === "PAID";
+ 
+      if (advancePaid) {
+        await Enrollment.findByIdAndUpdate(invoice.enrollment, {
+          accessStatus: "ACTIVE",
+        });
+ 
+        await logAudit({
+          req,
+          action:   "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
+          module:   "finance",
+          targetId: invoice.enrollment,
+          after:    { accessStatus: "ACTIVE" },
+        });
+      }
+    }
+ 
+    // ✅ AUTO JOURNAL — Bank/Cash debit + Receivable credit
+    await postPaymentJournal({
+      amount:      payment.amount,
+      method:      payment.method,
+      paymentId:   payment._id,
+      userId:      req.user._id,
+      description: `Payment approved — Invoice ${invoice?.invoiceNumber || payment.invoice}`,
+    });
+ 
+    await logAudit({
+      req,
+      action:   "PAYMENT_APPROVED",
+      module:   "finance",
+      targetId: payment._id,
+      before,
+      after:    payment.toObject(),
+    });
+ 
+    res.json({
+      success: true,
+      message: advancePaid
+        ? "Payment approved — Enrollment activated!"
+        : "Payment approved",
+      data:                payment,
+      enrollmentActivated: advancePaid,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
