@@ -221,6 +221,7 @@ const blogRoute = require("./routes/blogRoute.js");
 const seoRoute = require("./routes/seoMetaRoutes.js");
 const notificationRoute = require("./routes/notificationRoute.js");
 const accountRoute = require("./routes/accountRoute.js");
+const reportRoute = require("./routes/reportRoute.js");
 
 const connectDB = require("./config/db.js");
 
@@ -349,6 +350,7 @@ app.use("/api/v1/notifications", notificationRoute);
 
 // Admin Account Routes
 app.use("/api/v1/accounts", accountRoute);
+app.use("/api/v1/reports", reportRoute);
 
 
 // ======================
