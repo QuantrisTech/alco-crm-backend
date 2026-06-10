@@ -43,7 +43,7 @@ const sendEmailDynamic = async (options) => {
     }
 
     const mailOptions = {
-        from: `"${process.env.EMAIL_FROM_NAME || "Support"}" <${process.env.EMAIL_USER}>`,
+        from: `"${process.env.EMAIL_FROM_NAME || "Arslan Larik Company"}" <${process.env.EMAIL_USER}>`,
         to: options.to,
         subject: options.subject,
         html: htmlContent || undefined,
