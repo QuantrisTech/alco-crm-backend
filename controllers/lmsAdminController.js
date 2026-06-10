@@ -455,7 +455,7 @@ exports.requestBook = async (req, res) => {
         role: "user",
         isVerified: true,
         isTemporaryPassword: true,
-        source: `resource-${resource._id}`,
+        source: `resource`,
       });
 
       // ── Credentials email ─────────────────────────────────
