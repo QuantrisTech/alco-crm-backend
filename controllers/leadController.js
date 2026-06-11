@@ -234,11 +234,13 @@ exports.createLead = async (req, res) => {
             created_by: req.user?.id || null,
         };
 
-        // ── Step 1: User check ─────────────────────────────────
+        const assignedManager = await assignLeadManager();
+
+        // ── Step 1: Existing user check ────────────────────────
         const existingUser = await User.findOne({ email });
-        const assignedManager = await assignLeadManager(); // ✅ moved UP — available everywhere below
 
         if (existingUser) {
+            // Same program check
             const existingLead = await Lead.findOne({ email, program_id });
 
             if (existingLead) {
@@ -248,14 +250,20 @@ exports.createLead = async (req, res) => {
                     message: "Thank you for your interest! We already have your application and will contact you soon. 😊",
                 });
             }
-            // ← no longer re-declared here
 
+            // ✅ Existing user, new program → sirf lead banao, user mat banao
             const lead = await Lead.create({
                 ...leadData,
                 user_id: existingUser._id,
-                assigned_to: assignedManager, // ✅ works
+                assigned_to: assignedManager,
             });
-            // ...
+
+            return res.status(201).json({
+                success: true,
+                duplicate: false,
+                message: "Thank you for applying! We'll be in touch soon. 😊",
+                data: lead,
+            });
         }
 
         // ── Step 2: Naya user banao ────────────────────────────
