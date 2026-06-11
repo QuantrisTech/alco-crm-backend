@@ -13,14 +13,14 @@ exports.createEnrollment = async (req, res) => {
         message: "User, Program, and Payment Plan are required",
       });
     }
-    const { user, program, batch } = req.body; // Include paymentPlan
+    // const { user, program, batch } = req.body; // Include paymentPlan
 
-    if (!user || !program) {
-      return res.status(400).json({
-        success: false,
-        message: "User, Program, and Payment Plan are required",
-      });
-    }
+    // if (!user || !program) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "User, Program, and Payment Plan are required",
+    //   });
+    // }
 
 
     const existing = await Enrollment.findOne({ user, program });
