@@ -936,6 +936,8 @@ exports.convertLead = async (req, res) => {
             batch: lead.batch_id,
             status: "active",
             accessStatus: "RESTRICTED",
+            assigned_to: lead.assigned_to,
+            assigned_to: lead.assigned_to,
         });
 
         // ── Step 5: Invoice Number ────────────────────────────────
