@@ -515,6 +515,8 @@ exports.createExpense = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await expense.save();
+
     await logAudit({
       req,
       action: "EXPENSE_CREATED",
