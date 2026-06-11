@@ -99,19 +99,19 @@ const journalEntrySchema = new mongoose.Schema(
 );
 
 // ✅ No DB query — timestamp + random suffix
-journalEntrySchema.pre("save", function (next) {
-  if (!this.entryNumber) {
-    this.entryNumber = generateUniqueNumber("JE");
-  }
-  if (!this.period?.month) {
-    const d = this.date || new Date();
-    this.period = {
-      month: d.getMonth() + 1,
-      year:  d.getFullYear(),
-    };
-  }
-  next();
-});
+// journalEntrySchema.pre("save", function (next) {
+//   if (!this.entryNumber) {
+//     this.entryNumber = generateUniqueNumber("JE");
+//   }
+//   if (!this.period?.month) {
+//     const d = this.date || new Date();
+//     this.period = {
+//       month: d.getMonth() + 1,
+//       year:  d.getFullYear(),
+//     };
+//   }
+//   next();
+// });
 
 journalEntrySchema.index({ sourceType: 1, sourceRef: 1 });
 journalEntrySchema.index({ "period.year": 1, "period.month": 1 });

@@ -4,6 +4,7 @@ const JournalEntry = require("../models/journalEntryModel.js");
 const Expense = require("../models/expenseModel.js");
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
+const generateUniqueNumber = require("../utils/generateUniqueNumber.js");
 
 // ─────────────────────────────────────────────────────────────
 // SEED — Default Chart of Accounts
@@ -11,32 +12,32 @@ const mongoose = require("mongoose");
 
 const DEFAULT_ACCOUNTS = [
   // ── ASSETS ──────────────────────────────────────────────────
-  { code: "1001", name: "Cash in Hand",          type: "asset",     subType: "cash",               isSystem: true },
-  { code: "1002", name: "Bank Account (HBL)",    type: "asset",     subType: "bank",               isSystem: true },
-  { code: "1003", name: "Bank Account (Meezan)", type: "asset",     subType: "bank",               isSystem: false },
-  { code: "1100", name: "Accounts Receivable",   type: "asset",     subType: "accounts_receivable",isSystem: true },
-  { code: "1200", name: "Other Assets",          type: "asset",     subType: "other_asset",        isSystem: false },
+  { code: "1001", name: "Cash in Hand", type: "asset", subType: "cash", isSystem: true },
+  { code: "1002", name: "Bank Account (HBL)", type: "asset", subType: "bank", isSystem: true },
+  { code: "1003", name: "Bank Account (Meezan)", type: "asset", subType: "bank", isSystem: false },
+  { code: "1100", name: "Accounts Receivable", type: "asset", subType: "accounts_receivable", isSystem: true },
+  { code: "1200", name: "Other Assets", type: "asset", subType: "other_asset", isSystem: false },
 
   // ── LIABILITIES ──────────────────────────────────────────────
-  { code: "2001", name: "Accounts Payable",      type: "liability", subType: "accounts_payable",   isSystem: true },
-  { code: "2100", name: "Other Liabilities",     type: "liability", subType: "other_liability",    isSystem: false },
+  { code: "2001", name: "Accounts Payable", type: "liability", subType: "accounts_payable", isSystem: true },
+  { code: "2100", name: "Other Liabilities", type: "liability", subType: "other_liability", isSystem: false },
 
   // ── EQUITY ───────────────────────────────────────────────────
-  { code: "3001", name: "Owner's Equity",        type: "equity",    subType: "owners_equity",      isSystem: true },
-  { code: "3002", name: "Retained Earnings",     type: "equity",    subType: "retained_earnings",  isSystem: true },
+  { code: "3001", name: "Owner's Equity", type: "equity", subType: "owners_equity", isSystem: true },
+  { code: "3002", name: "Retained Earnings", type: "equity", subType: "retained_earnings", isSystem: true },
 
   // ── INCOME ───────────────────────────────────────────────────
-  { code: "4001", name: "Tuition Fee Income",    type: "income",    subType: "tuition_fee",        isSystem: true },
-  { code: "4002", name: "Registration Fee",      type: "income",    subType: "registration_fee",   isSystem: true },
-  { code: "4003", name: "Other Income",          type: "income",    subType: "other_income",       isSystem: false },
+  { code: "4001", name: "Tuition Fee Income", type: "income", subType: "tuition_fee", isSystem: true },
+  { code: "4002", name: "Registration Fee", type: "income", subType: "registration_fee", isSystem: true },
+  { code: "4003", name: "Other Income", type: "income", subType: "other_income", isSystem: false },
 
   // ── EXPENSES ─────────────────────────────────────────────────
-  { code: "5001", name: "Salaries & Wages",      type: "expense",   subType: "salary",             isSystem: true },
-  { code: "5002", name: "Marketing & Ads",       type: "expense",   subType: "marketing",          isSystem: false },
-  { code: "5003", name: "Utilities",             type: "expense",   subType: "utilities",          isSystem: false },
-  { code: "5004", name: "Office Rent",           type: "expense",   subType: "rent",               isSystem: false },
-  { code: "5005", name: "Software & Tools",      type: "expense",   subType: "software",           isSystem: false },
-  { code: "5006", name: "Other Expenses",        type: "expense",   subType: "other_expense",      isSystem: false },
+  { code: "5001", name: "Salaries & Wages", type: "expense", subType: "salary", isSystem: true },
+  { code: "5002", name: "Marketing & Ads", type: "expense", subType: "marketing", isSystem: false },
+  { code: "5003", name: "Utilities", type: "expense", subType: "utilities", isSystem: false },
+  { code: "5004", name: "Office Rent", type: "expense", subType: "rent", isSystem: false },
+  { code: "5005", name: "Software & Tools", type: "expense", subType: "software", isSystem: false },
+  { code: "5006", name: "Other Expenses", type: "expense", subType: "other_expense", isSystem: false },
 ];
 
 // POST /api/v1/accounts/seed
@@ -89,11 +90,11 @@ exports.getAllAccounts = async (req, res) => {
 
     // Group by type for frontend convenience
     const grouped = {
-      asset:     accounts.filter(a => a.type === "asset"),
+      asset: accounts.filter(a => a.type === "asset"),
       liability: accounts.filter(a => a.type === "liability"),
-      equity:    accounts.filter(a => a.type === "equity"),
-      income:    accounts.filter(a => a.type === "income"),
-      expense:   accounts.filter(a => a.type === "expense"),
+      equity: accounts.filter(a => a.type === "equity"),
+      income: accounts.filter(a => a.type === "income"),
+      expense: accounts.filter(a => a.type === "expense"),
     };
 
     res.json({ success: true, data: accounts, grouped });
@@ -241,7 +242,7 @@ exports.getAccountLedger = async (req, res) => {
     // Date filter
     const dateFilter = {};
     if (from) dateFilter.$gte = new Date(from);
-    if (to)   dateFilter.$lte = new Date(to);
+    if (to) dateFilter.$lte = new Date(to);
 
     const journalFilter = {
       "lines.account": new mongoose.Types.ObjectId(accountId),
@@ -283,7 +284,7 @@ exports.getAccountLedger = async (req, res) => {
           entryNumber: entry.entryNumber,
           description: entry.description,
           sourceType: entry.sourceType,
-          debit:  line.type === "debit"  ? line.amount : 0,
+          debit: line.type === "debit" ? line.amount : 0,
           credit: line.type === "credit" ? line.amount : 0,
           balance: runningBalance,
         });
@@ -320,7 +321,7 @@ exports.getAllJournalEntries = async (req, res) => {
     if (from || to) {
       filter.date = {};
       if (from) filter.date.$gte = new Date(from);
-      if (to)   filter.date.$lte = new Date(to);
+      if (to) filter.date.$lte = new Date(to);
     }
 
     const total = await JournalEntry.countDocuments(filter);
@@ -368,6 +369,11 @@ exports.createJournalEntry = async (req, res) => {
       status: "posted",
       createdBy: req.user._id,
       notes: notes || "",
+      entryNumber: generateUniqueNumber("JE"),
+      period: {
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+      },
     }], { session });
 
     // Update account balances
@@ -376,8 +382,8 @@ exports.createJournalEntry = async (req, res) => {
       const isDebitNormal = ["asset", "expense"].includes(account.type);
 
       const delta = line.type === "debit"
-        ? (isDebitNormal ?  line.amount : -line.amount)
-        : (isDebitNormal ? -line.amount :  line.amount);
+        ? (isDebitNormal ? line.amount : -line.amount)
+        : (isDebitNormal ? -line.amount : line.amount);
 
       account.currentBalance += delta;
       await account.save({ session });
@@ -411,12 +417,12 @@ exports.getAllExpenses = async (req, res) => {
     const { status, category, from, to, page = 1, limit = 10 } = req.query;
 
     const filter = {};
-    if (status)   filter.status = status;
+    if (status) filter.status = status;
     if (category) filter.category = category;
     if (from || to) {
       filter.date = {};
       if (from) filter.date.$gte = new Date(from);
-      if (to)   filter.date.$lte = new Date(to);
+      if (to) filter.date.$lte = new Date(to);
     }
 
     const total = await Expense.countDocuments(filter);
@@ -513,6 +519,7 @@ exports.createExpense = async (req, res) => {
       notes: notes || "",
       status: "pending_approval",
       createdBy: req.user._id,
+      expenseNumber: generateUniqueNumber("EXP"),
     });
 
     await expense.save();
@@ -561,8 +568,8 @@ exports.approveExpense = async (req, res) => {
       description: `Expense: ${expense.title}`,
       date: expense.date,
       lines: [
-        { account: expenseAccount._id, type: "debit",  amount: expense.amount, description: expense.title },
-        { account: cashAccount._id,    type: "credit", amount: expense.amount, description: expense.title },
+        { account: expenseAccount._id, type: "debit", amount: expense.amount, description: expense.title },
+        { account: cashAccount._id, type: "credit", amount: expense.amount, description: expense.title },
       ],
       sourceType: "expense",
       sourceRef: expense._id,
@@ -573,14 +580,14 @@ exports.approveExpense = async (req, res) => {
 
     // Update balances
     expenseAccount.currentBalance += expense.amount;
-    cashAccount.currentBalance    -= expense.amount;
+    cashAccount.currentBalance -= expense.amount;
     await expenseAccount.save({ session });
     await cashAccount.save({ session });
 
     // Update expense status
-    expense.status      = "approved";
-    expense.approvedBy  = req.user._id;
-    expense.approvedAt  = new Date();
+    expense.status = "approved";
+    expense.approvedBy = req.user._id;
+    expense.approvedAt = new Date();
     expense.journalEntry = entry[0]._id;
     await expense.save({ session });
 
@@ -612,8 +619,8 @@ exports.rejectExpense = async (req, res) => {
       return res.status(404).json({ success: false, message: "Expense not found" });
 
     const before = expense.toObject();
-    expense.status          = "rejected";
-    expense.rejectedBy      = req.user._id;
+    expense.status = "rejected";
+    expense.rejectedBy = req.user._id;
     expense.rejectionReason = reason || "No reason provided";
     await expense.save();
 
@@ -643,14 +650,14 @@ exports.getAccountsDashboard = async (req, res) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Total income accounts balance
-    const incomeAccounts  = await Account.find({ type: "income",  isActive: true });
+    const incomeAccounts = await Account.find({ type: "income", isActive: true });
     const expenseAccounts = await Account.find({ type: "expense", isActive: true });
-    const assetAccounts   = await Account.find({ type: "asset",   isActive: true });
+    const assetAccounts = await Account.find({ type: "asset", isActive: true });
 
-    const totalIncome   = incomeAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    const totalIncome = incomeAccounts.reduce((s, a) => s + a.currentBalance, 0);
     const totalExpenses = expenseAccounts.reduce((s, a) => s + a.currentBalance, 0);
-    const totalAssets   = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
-    const netProfit     = totalIncome - totalExpenses;
+    const totalAssets = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    const netProfit = totalIncome - totalExpenses;
 
     // This month's journal entries
     const monthlyEntries = await JournalEntry.countDocuments({

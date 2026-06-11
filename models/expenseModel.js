@@ -115,12 +115,12 @@ const expenseSchema = new mongoose.Schema(
 );
 
 // ✅ No DB query — timestamp + random suffix
-expenseSchema.pre("save", function (next) {
-  if (!this.expenseNumber) {
-    this.expenseNumber = generateUniqueNumber("EXP");
-  }
-  next();
-});
+// expenseSchema.pre("save", function (next) {
+//   if (!this.expenseNumber) {
+//     this.expenseNumber = generateUniqueNumber("EXP");
+//   }
+//   next();
+// });
 
 expenseSchema.index({ status: 1 });
 expenseSchema.index({ category: 1 });
