@@ -394,7 +394,7 @@ exports.adminGetPublicResources = async (req, res) => {
 //           UserPassword: tempPassword,
 //           SupportEmail: "alco@support.com",
 //           YourCompanyName: "Al-and-co",
-//           LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${tempPassword}`,
+//           LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${tempPassword}`,
 //         },
 //       });
 //     }

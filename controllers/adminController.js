@@ -299,7 +299,7 @@ exports.createUser = async (req, res) => {
         UserPassword: password,  // Use the plain password here
         SupportEmail: "alco@support.com",
         YourCompanyName: "Al-and-co",
-        LoginLink: "https://alco-crm-frontend.vercel.app/login?email=" + email + "&password=" + password,
+        LoginLink: "https://app.arslanlarik.com/login?email=" + email + "&password=" + password,
       },
     });
 
