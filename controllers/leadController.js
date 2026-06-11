@@ -435,11 +435,36 @@ exports.getLeads = async (req, res) => {
         if (assigned_to) query.assigned_to = assigned_to;
         if (quality) query.quality = quality;
 
+        // if (search) {
+        //     query.$or = [
+        //         { first_name: { $regex: search, $options: "i" } },
+        //         { last_name: { $regex: search, $options: "i" } },
+        //         { email: { $regex: search, $options: "i" } },
+        //     ];
+        // }
+
         if (search) {
+            const searchRegex = new RegExp(search, "i");
+
+            // assigned_to name se matching users dhundo
+            const matchingUsers = await User.find({ name: searchRegex }).select("_id");
+            const matchingUserIds = matchingUsers.map((u) => u._id);
+
             query.$or = [
-                { first_name: { $regex: search, $options: "i" } },
-                { last_name: { $regex: search, $options: "i" } },
-                { email: { $regex: search, $options: "i" } },
+                { first_name: searchRegex },
+                { last_name: searchRegex },
+                { email: searchRegex },
+                { phone: searchRegex },
+                { assigned_to: { $in: matchingUserIds } },
+                {
+                    $expr: {
+                        $regexMatch: {
+                            input: { $concat: ["$first_name", " ", { $ifNull: ["$last_name", ""] }] },
+                            regex: search,
+                            options: "i",
+                        },
+                    },
+                },
             ];
         }
 
@@ -1351,7 +1376,7 @@ exports.submitContract = async (req, res) => {
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
-         if (lead.status === "converted") {
+        if (lead.status === "converted") {
             return res.status(400).json({
                 success: false,
                 message: "Contract cannot be edited after lead is converted.",

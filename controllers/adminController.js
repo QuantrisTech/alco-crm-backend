@@ -27,10 +27,33 @@ exports.getAllUsers = async (req, res) => {
     }
 
     // 🔎 Search (name/email)
+    // if (search) {
+    //   query.$or = [
+    //     { name: { $regex: search, $options: "i" } },
+    //     { email: { $regex: search, $options: "i" } },
+    //   ];
+    // }
     if (search) {
+      const searchRegex = new RegExp(search, "i");
+
+      const matchingUsers = await User.find({ name: searchRegex }).select("_id");
+      const matchingUserIds = matchingUsers.map((u) => u._id);
+
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { first_name: searchRegex },
+        { last_name: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        ...(matchingUserIds.length > 0 ? [{ assigned_to: { $in: matchingUserIds } }] : []),
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $concat: ["$first_name", " ", { $ifNull: ["$last_name", ""] }] },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
       ];
     }
 
