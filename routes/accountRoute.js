@@ -26,51 +26,32 @@ const adminOnly    = authorize("admin", "super_admin");
 const financeAdmin = authorize("admin", "super_admin", "finance_manager");
 
 // ─── SEED ─────────────────────────────────────────────────────
-// POST /api/v1/accounts/seed
 router.post("/seed", protect, adminOnly, seedAccounts);
 
 // ─── DASHBOARD ────────────────────────────────────────────────
-// GET /api/v1/accounts/dashboard
 router.get("/dashboard", protect, financeAdmin, getAccountsDashboard);
 
-// ─── CHART OF ACCOUNTS ────────────────────────────────────────
-// GET    /api/v1/accounts
-router.get("/",     protect, financeAdmin, getAllAccounts);
-
-// POST   /api/v1/accounts
-router.post("/",    protect, adminOnly, createAccount);
-
-// GET    /api/v1/accounts/:id
-router.get("/:id",  protect, financeAdmin, getAccountById);
-
-// PATCH  /api/v1/accounts/:id
-router.patch("/:id", protect, adminOnly, updateAccount);
-
-// DELETE /api/v1/accounts/:id
-router.delete("/:id", protect, adminOnly, deleteAccount);
-
-// ─── LEDGER ───────────────────────────────────────────────────
-// GET /api/v1/accounts/:id/ledger
-router.get("/:id/ledger", protect, financeAdmin, getAccountLedger);
-
 // ─── JOURNAL ENTRIES ──────────────────────────────────────────
-// GET  /api/v1/accounts/journal
+// ✅ Must be before /:id
 router.get("/journal",  protect, financeAdmin, getAllJournalEntries);
-
-// POST /api/v1/accounts/journal
 router.post("/journal", protect, adminOnly, createJournalEntry);
 
 // ─── EXPENSES ─────────────────────────────────────────────────
-// GET  /api/v1/accounts/expenses
+// ✅ Must be before /:id
 router.get("/expenses",  protect, financeAdmin, getAllExpenses);
-
-// POST /api/v1/accounts/expenses
 router.post("/expenses", protect, financeAdmin, createExpense);
-
-// PATCH /api/v1/accounts/expenses/:id/approve
 router.patch("/expenses/:id/approve", protect, financeAdmin, approveExpense);
-
-// PATCH /api/v1/accounts/expenses/:id/reject
 router.patch("/expenses/:id/reject",  protect, financeAdmin, rejectExpense);
+
+// ─── CHART OF ACCOUNTS ────────────────────────────────────────
+// ✅ /:id routes LAST
+router.get("/",      protect, financeAdmin, getAllAccounts);
+router.post("/",     protect, adminOnly, createAccount);
+router.get("/:id",   protect, financeAdmin, getAccountById);
+router.patch("/:id", protect, adminOnly, updateAccount);
+router.delete("/:id",protect, adminOnly, deleteAccount);
+
+// ─── LEDGER ───────────────────────────────────────────────────
+router.get("/:id/ledger", protect, financeAdmin, getAccountLedger);
 
 module.exports = router;
