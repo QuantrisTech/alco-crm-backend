@@ -177,6 +177,17 @@ exports.getAllEnrollments = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // Step 3: Search filter — user name, email, phone pe
+    // const filtered = search
+    //   ? allEnrollments.filter((e) => {
+    //     const q = search.toLowerCase();
+    //     return (
+    //       e.user?.name?.toLowerCase().includes(q) ||
+    //       e.user?.email?.toLowerCase().includes(q) ||
+    //       e.user?.phone?.toLowerCase().includes(q) ||
+    //       e.program?.name?.toLowerCase().includes(q)
+    //     );
+    //   })
+    //   : allEnrollments;
     const filtered = search
       ? allEnrollments.filter((e) => {
         const q = search.toLowerCase();
@@ -184,7 +195,8 @@ exports.getAllEnrollments = async (req, res) => {
           e.user?.name?.toLowerCase().includes(q) ||
           e.user?.email?.toLowerCase().includes(q) ||
           e.user?.phone?.toLowerCase().includes(q) ||
-          e.program?.name?.toLowerCase().includes(q)
+          e.program?.name?.toLowerCase().includes(q) ||
+          e.assigned_to?.name?.toLowerCase().includes(q)  
         );
       })
       : allEnrollments;
