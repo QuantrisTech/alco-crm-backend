@@ -448,6 +448,46 @@ exports.getAllExpenses = async (req, res) => {
 };
 
 // POST /api/v1/accounts/expenses
+// exports.createExpense = async (req, res) => {
+//   try {
+//     const {
+//       title, description, amount, account, category,
+//       vendor, paymentMethod, referenceNumber, date,
+//       isRecurring, recurringInterval, notes,
+//     } = req.body;
+
+//     if (!title || !amount || !account || !category || !paymentMethod)
+//       return res.status(400).json({ success: false, message: "title, amount, account, category, paymentMethod are required" });
+
+//     const accExists = await Account.findById(account);
+//     if (!accExists || accExists.type !== "expense")
+//       return res.status(400).json({ success: false, message: "Valid expense account required" });
+
+//     const expense = await Expense.create({
+//       title, description, amount, account, category,
+//       vendor: vendor || {},
+//       paymentMethod, referenceNumber,
+//       date: date ? new Date(date) : new Date(),
+//       isRecurring: isRecurring || false,
+//       recurringInterval: recurringInterval || null,
+//       notes: notes || "",
+//       status: "pending_approval",
+//       createdBy: req.user._id,
+//     });
+
+//     await logAudit({
+//       req,
+//       action: "EXPENSE_CREATED",
+//       module: "accounts",
+//       targetId: expense._id,
+//       after: expense.toObject(),
+//     });
+
+//     res.status(201).json({ success: true, data: expense });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.createExpense = async (req, res) => {
   try {
     const {
@@ -463,7 +503,7 @@ exports.createExpense = async (req, res) => {
     if (!accExists || accExists.type !== "expense")
       return res.status(400).json({ success: false, message: "Valid expense account required" });
 
-    const expense = await Expense.create({
+    const expense = new Expense({
       title, description, amount, account, category,
       vendor: vendor || {},
       paymentMethod, referenceNumber,
@@ -485,6 +525,7 @@ exports.createExpense = async (req, res) => {
 
     res.status(201).json({ success: true, data: expense });
   } catch (err) {
+    console.error("createExpense error:", err); // ← full stack
     res.status(500).json({ success: false, message: err.message });
   }
 };
