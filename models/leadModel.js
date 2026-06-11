@@ -82,7 +82,7 @@ const leadSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact", "webinar", "frontforce", "lms", "crm",  "resource", "other"],
+      enum: ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact", "webinar", "frontforce", "lms", "crm", "resource", "other"],
       default: "enroll"
     },
 
@@ -156,6 +156,7 @@ const leadSchema = new mongoose.Schema(
       bankAccountNumber: String,
       currentAddress: String,
       emergencyContactName: String,
+      emergencyContactPhone: String,
       occupation: String,
 
       // Agreements (checkboxes)

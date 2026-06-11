@@ -153,6 +153,7 @@ const enrollmentSchema = new mongoose.Schema(
         bankAccountNumber: String,
         currentAddress: String,
         emergencyContactName: String,
+        emergencyContactPhone: String,
         occupation: String,
         participationAgreement: Boolean,
         photoVideoRelease: Boolean,
