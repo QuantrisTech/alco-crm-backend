@@ -159,11 +159,14 @@ exports.getAllEnrollments = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
-    const { search, status } = req.query;
+
+    // const { search, status } = req.query;
+    const { search, status, assigned_to } = req.query;
 
     // Step 1: Enrollment level filter (status)
     const enrollmentFilter = {};
     if (status) enrollmentFilter.status = status;
+    if (assigned_to) enrollmentFilter.assigned_to = assigned_to;
 
     // Step 2: Pehle sari matching enrollments fetch karo (populate ke saath)
     // const allEnrollments = await Enrollment.find(enrollmentFilter)
@@ -196,7 +199,7 @@ exports.getAllEnrollments = async (req, res) => {
           e.user?.email?.toLowerCase().includes(q) ||
           e.user?.phone?.toLowerCase().includes(q) ||
           e.program?.name?.toLowerCase().includes(q) ||
-          e.assigned_to?.name?.toLowerCase().includes(q)  
+          e.assigned_to?.name?.toLowerCase().includes(q)
         );
       })
       : allEnrollments;
