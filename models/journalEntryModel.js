@@ -32,6 +32,7 @@ const journalEntrySchema = new mongoose.Schema(
     entryNumber: {
       type: String,
       unique: true,
+      sparse: true,
     },
     date: {
       type: Date,
@@ -47,7 +48,7 @@ const journalEntrySchema = new mongoose.Schema(
       validate: {
         validator: function (lines) {
           if (lines.length < 2) return false;
-          const totalDebit  = lines.filter(l => l.type === "debit").reduce((s, l) => s + l.amount, 0);
+          const totalDebit = lines.filter(l => l.type === "debit").reduce((s, l) => s + l.amount, 0);
           const totalCredit = lines.filter(l => l.type === "credit").reduce((s, l) => s + l.amount, 0);
           return Math.abs(totalDebit - totalCredit) < 0.01;
         },
@@ -80,7 +81,7 @@ const journalEntrySchema = new mongoose.Schema(
     },
     period: {
       month: Number,
-      year:  Number,
+      year: Number,
     },
     isLocked: {
       type: Boolean,
