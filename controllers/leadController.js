@@ -1327,12 +1327,12 @@ exports.markInterested = async (req, res) => {
         // };
         // ✅ Pehle existing contractDetails spread karo, phir override karo
         lead.contractDetails = {
-            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},
+            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},  
             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
             email: lead.email,
             phone: lead.phone || "",
             programName: lead.program_name || "",
-            status: lead.contractDetails?.status || "pending",
+            status: lead.contractDetails?.status || "pending", 
         };
 
         // Payment plan agar bheja hai to save karo
@@ -1383,8 +1383,92 @@ exports.markInterested = async (req, res) => {
 };
 
 // ─── 2. Submit Contract (user side) ──────────────────────────
+// exports.submitContract = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id);
+//         if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+//         if (lead.status === "converted") {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Contract cannot be edited after lead is converted.",
+//             });
+//         }
+
+//         const program = await Program.findById(lead.program_id);
+//         const programName = program?.name || "";
+
+//         const {
+//             fatherHusbandName,
+//             cnic,
+//             bankAccountNumber,
+//             currentAddress,
+//             emergencyContactName,
+//             emergencyContactPhone,
+//             occupation,
+//             participationAgreement,
+//             photoVideoRelease,
+//             signatureType,
+//             signatureData,
+//         } = req.body;
+
+//         // Merge karo — auto-fill fields preserve hongi
+//         lead.contractDetails = {
+//             ...lead.contractDetails,
+//             programName,
+//             fatherHusbandName,
+//             cnic,
+//             bankAccountNumber,
+//             currentAddress,
+//             emergencyContactName,
+//             emergencyContactPhone,
+//             occupation,
+//             participationAgreement,
+//             photoVideoRelease,
+//             signatureType,
+//             signatureData,
+//             status: "signed",
+//             signedAt: new Date(),
+//             submittedAt: new Date(),
+//         };
+
+//         await lead.save();
+
+//         // ── Admin ko notify karo ─────────────────────────────────
+//         if (lead.assigned_to) {
+//             await notifyContractSubmitted({
+//                 userId: lead.assigned_to.toString(),
+//                 leadName: `${lead.first_name} ${lead.last_name}`,
+//                 leadId: lead._id.toString(),
+//                 triggeredBy: lead.user_id?.toString(),
+//             });
+//         }
+
+//         // ── User ko confirmation email ───────────────────────────
+//         const user = await User.findById(lead.user_id).select("email name");
+//         if (user?.email) {
+//             await sendEmailDynamic({
+//                 to: user.email,
+//                 subject: "Contract Received — We'll Be in Touch Soon ✅",
+//                 templateName: "contract-submitted",
+//                 replacements: {
+//                     UserName: user.name || lead.first_name,
+//                     ProgramName: programName || "the program",
+//                     SupportEmail: "alco@support.com",
+//                     YourCompanyName: "Al-and-co",
+//                 },
+//             });
+//         }
+
+//         res.status(200).json({ success: true, message: "Contract submitted!", data: lead });
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
 exports.submitContract = async (req, res) => {
     try {
+        console.log("REQ BODY:", JSON.stringify(req.body));
+
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
@@ -1395,49 +1479,34 @@ exports.submitContract = async (req, res) => {
             });
         }
 
+        // ── Safe destructure ─────────────────────────────────────
+        if (!req.body || typeof req.body !== "object") {
+            return res.status(400).json({
+                success: false,
+                message: "Request body is missing or invalid",
+            });
+        }
+
         const {
-            fatherHusbandName,
-            cnic,
-            bankAccountNumber,
-            currentAddress,
-            emergencyContactName,
-            emergencyContactPhone,
-            occupation,
-            participationAgreement,
-            photoVideoRelease,
-            signatureType,
-            signatureData,
+            fatherHusbandName = "",
+            cnic = "",
+            bankAccountNumber = "",
+            currentAddress = "",
+            emergencyContactName = "",
+            emergencyContactPhone = "",
+            occupation = "",
+            participationAgreement = false,
+            photoVideoRelease = false,
+            signatureType = "draw",
+            signatureData = "",
         } = req.body;
 
-         const program = await Program.findById(lead.program_id);
+        const program = await Program.findById(lead.program_id);
         const programName = program?.name || lead.contractDetails?.programName || "";
 
-
-        // // Merge karo — auto-fill fields preserve hongi
-        // lead.contractDetails = {
-        //     ...lead.contractDetails,
-        //     programName,
-        //     fatherHusbandName,
-        //     cnic,
-        //     bankAccountNumber,
-        //     currentAddress,
-        //     emergencyContactName,
-        //     emergencyContactPhone,
-        //     occupation,
-        //     participationAgreement,
-        //     photoVideoRelease,
-        //     signatureType,
-        //     signatureData,
-        //     status: "signed",
-        //     signedAt: new Date(),
-        //     submittedAt: new Date(),
-        // };
-
-        // await lead.save();
-        // ── Existing contractDetails ko properly merge karo ──────────
         const existing = lead.contractDetails?.toObject
             ? lead.contractDetails.toObject()
-            : { ...lead.contractDetails };
+            : { ...(lead.contractDetails || {}) };
 
         lead.contractDetails = {
             ...existing,
@@ -1458,10 +1527,10 @@ exports.submitContract = async (req, res) => {
             submittedAt: new Date(),
         };
 
-        lead.markModified("contractDetails"); // ← zaroor lagao nested object ke liye
+        lead.markModified("contractDetails");
         await lead.save();
 
-        // ── Admin ko notify karo ─────────────────────────────────
+        // ── Admin notify ─────────────────────────────────────────
         if (lead.assigned_to) {
             await notifyContractSubmitted({
                 userId: lead.assigned_to.toString(),
@@ -1471,7 +1540,7 @@ exports.submitContract = async (req, res) => {
             });
         }
 
-        // ── User ko confirmation email ───────────────────────────
+        // ── User confirmation email ──────────────────────────────
         const user = await User.findById(lead.user_id).select("email name");
         if (user?.email) {
             await sendEmailDynamic({
@@ -1488,8 +1557,10 @@ exports.submitContract = async (req, res) => {
         }
 
         res.status(200).json({ success: true, message: "Contract submitted!", data: lead });
+
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error("submitContract error:", err); // ← full error object
+        res.status(500).json({ message: err.message, stack: err.stack }); // ← stack bhi bhejo temporarily
     }
 };
 
