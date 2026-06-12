@@ -7,6 +7,7 @@ const expenseSchema = new mongoose.Schema(
     expenseNumber: {
       type: String,
       unique: true,
+  sparse: true,
     },
     title: {
       type: String,
