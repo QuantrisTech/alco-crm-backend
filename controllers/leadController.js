@@ -1326,12 +1326,12 @@ exports.markInterested = async (req, res) => {
         // };
         // ✅ Pehle existing contractDetails spread karo, phir override karo
         lead.contractDetails = {
-            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},  
+            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},
             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
             email: lead.email,
             phone: lead.phone || "",
             programName: lead.program_name || "",
-            status: lead.contractDetails?.status || "pending", 
+            status: lead.contractDetails?.status || "pending",
         };
 
         // Payment plan agar bheja hai to save karo
@@ -1397,23 +1397,48 @@ exports.submitContract = async (req, res) => {
         const program = await Program.findById(lead.program_id);
         const programName = program?.name || "";
 
-        const {
-            fatherHusbandName,
-            cnic,
-            bankAccountNumber,
-            currentAddress,
-            emergencyContactName,
-            emergencyContactPhone,
-            occupation,
-            participationAgreement,
-            photoVideoRelease,
-            signatureType,
-            signatureData,
-        } = req.body;
+        // const {
+        //     fatherHusbandName,
+        //     cnic,
+        //     bankAccountNumber,
+        //     currentAddress,
+        //     emergencyContactName,
+        //     emergencyContactPhone,
+        //     occupation,
+        //     participationAgreement,
+        //     photoVideoRelease,
+        //     signatureType,
+        //     signatureData,
+        // } = req.body;
 
-        // Merge karo — auto-fill fields preserve hongi
+        // // Merge karo — auto-fill fields preserve hongi
+        // lead.contractDetails = {
+        //     ...lead.contractDetails,
+        //     programName,
+        //     fatherHusbandName,
+        //     cnic,
+        //     bankAccountNumber,
+        //     currentAddress,
+        //     emergencyContactName,
+        //     emergencyContactPhone,
+        //     occupation,
+        //     participationAgreement,
+        //     photoVideoRelease,
+        //     signatureType,
+        //     signatureData,
+        //     status: "signed",
+        //     signedAt: new Date(),
+        //     submittedAt: new Date(),
+        // };
+
+        // await lead.save();
+        // ── Existing contractDetails ko properly merge karo ──────────
+        const existing = lead.contractDetails?.toObject
+            ? lead.contractDetails.toObject()
+            : { ...lead.contractDetails };
+
         lead.contractDetails = {
-            ...lead.contractDetails,
+            ...existing,
             programName,
             fatherHusbandName,
             cnic,
@@ -1431,6 +1456,7 @@ exports.submitContract = async (req, res) => {
             submittedAt: new Date(),
         };
 
+        lead.markModified("contractDetails"); // ← zaroor lagao nested object ke liye
         await lead.save();
 
         // ── Admin ko notify karo ─────────────────────────────────
