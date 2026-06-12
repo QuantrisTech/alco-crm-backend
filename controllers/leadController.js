@@ -1317,12 +1317,21 @@ exports.markInterested = async (req, res) => {
         lead.status = "interested";
 
         // Contract auto-fill (lead data se)
+        // lead.contractDetails = {
+        //     fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
+        //     email: lead.email,
+        //     phone: lead.phone || "",
+        //     programName: lead.program_name || "",
+        //     status: "pending",
+        // };
+        // ✅ Pehle existing contractDetails spread karo, phir override karo
         lead.contractDetails = {
+            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},  
             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
             email: lead.email,
             phone: lead.phone || "",
             programName: lead.program_name || "",
-            status: "pending",
+            status: lead.contractDetails?.status || "pending", 
         };
 
         // Payment plan agar bheja hai to save karo
