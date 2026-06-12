@@ -1394,7 +1394,7 @@ exports.submitContract = async (req, res) => {
                 message: "Contract cannot be edited after lead is converted.",
             });
         }
-        
+
         const {
             fatherHusbandName,
             cnic,
@@ -1409,8 +1409,8 @@ exports.submitContract = async (req, res) => {
             signatureData,
         } = req.body;
 
-        const program = await Program.findById(lead.program_id);
-        const programName = program?.name || "";
+         const program = await Program.findById(lead.program_id);
+        const programName = program?.name || lead.contractDetails?.programName || "";
 
 
         // // Merge karo — auto-fill fields preserve hongi
