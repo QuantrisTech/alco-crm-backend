@@ -177,6 +177,11 @@ const leadSchema = new mongoose.Schema(
       submittedAt: Date,
     },
 
+    invoiceNumber: {
+      type: String,
+      default: null,
+    },
+
     created_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

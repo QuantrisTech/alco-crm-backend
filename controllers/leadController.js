@@ -980,6 +980,9 @@ exports.convertLead = async (req, res) => {
             status: "PENDING",
         });
 
+        lead.invoiceNumber = invoiceNumber;
+        await lead.save();
+
         // ── Step 7: Enrollment pe invoice link ───────────────────
         await Enrollment.findByIdAndUpdate(enrollment._id, { invoice: invoice._id });
 
@@ -1327,12 +1330,12 @@ exports.markInterested = async (req, res) => {
         // };
         // ✅ Pehle existing contractDetails spread karo, phir override karo
         lead.contractDetails = {
-            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},  
+            ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},
             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
             email: lead.email,
             phone: lead.phone || "",
             programName: lead.program_name || "",
-            status: lead.contractDetails?.status || "pending", 
+            status: lead.contractDetails?.status || "pending",
         };
 
         // Payment plan agar bheja hai to save karo
@@ -1597,7 +1600,7 @@ exports.getMyContract = async (req, res) => {
             user_id: req.user._id,
             "contractDetails.status": { $in: ["pending", "filled", "signed"] },
         })
-            .select("first_name last_name email phone program_name program_id contractDetails paymentPlan status createdAt updatedAt")
+            .select("first_name last_name email phone program_name program_id contractDetails paymentPlan invoiceNumber status createdAt updatedAt")
             .populate("program_id", "name")
             .sort({ updatedAt: -1 });
 
