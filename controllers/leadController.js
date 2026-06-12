@@ -470,6 +470,7 @@ exports.getLeads = async (req, res) => {
 
         const leads = await Lead.find(query)
             .populate("assigned_to", "name email")
+            .populate("program_id", "name")
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(Number(limit));
@@ -496,7 +497,7 @@ exports.getLeadById = async (req, res) => {
         const lead = await Lead.findById(req.params.id).populate(
             "assigned_to",
             "name email"
-        );
+        ).populate("program_id", "name price");
 
         if (!lead) {
             return res.status(404).json({ message: "Lead not found" });
@@ -1393,23 +1394,24 @@ exports.submitContract = async (req, res) => {
                 message: "Contract cannot be edited after lead is converted.",
             });
         }
+        
+        const {
+            fatherHusbandName,
+            cnic,
+            bankAccountNumber,
+            currentAddress,
+            emergencyContactName,
+            emergencyContactPhone,
+            occupation,
+            participationAgreement,
+            photoVideoRelease,
+            signatureType,
+            signatureData,
+        } = req.body;
 
         const program = await Program.findById(lead.program_id);
         const programName = program?.name || "";
 
-        // const {
-        //     fatherHusbandName,
-        //     cnic,
-        //     bankAccountNumber,
-        //     currentAddress,
-        //     emergencyContactName,
-        //     emergencyContactPhone,
-        //     occupation,
-        //     participationAgreement,
-        //     photoVideoRelease,
-        //     signatureType,
-        //     signatureData,
-        // } = req.body;
 
         // // Merge karo — auto-fill fields preserve hongi
         // lead.contractDetails = {
