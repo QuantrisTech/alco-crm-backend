@@ -564,6 +564,19 @@ exports.approveExpense = async (req, res) => {
     // Auto-post journal entry:
     // DEBIT  Expense Account  (increases expense)
     // CREDIT Cash in Hand     (decreases cash)
+    // const entry = await JournalEntry.create([{
+    //   description: `Expense: ${expense.title}`,
+    //   date: expense.date,
+    //   lines: [
+    //     { account: expenseAccount._id, type: "debit", amount: expense.amount, description: expense.title },
+    //     { account: cashAccount._id, type: "credit", amount: expense.amount, description: expense.title },
+    //   ],
+    //   sourceType: "expense",
+    //   sourceRef: expense._id,
+    //   entryType: "auto",
+    //   status: "posted",
+    //   createdBy: req.user._id,
+    // }], { session });
     const entry = await JournalEntry.create([{
       description: `Expense: ${expense.title}`,
       date: expense.date,
@@ -576,6 +589,11 @@ exports.approveExpense = async (req, res) => {
       entryType: "auto",
       status: "posted",
       createdBy: req.user._id,
+      entryNumber: generateUniqueNumber("JE"),  // ✅ yeh add karo
+      period: {
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+      },
     }], { session });
 
     // Update balances
