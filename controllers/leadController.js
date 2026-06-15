@@ -12,6 +12,7 @@ const Program = require("../models/programModel.js");
 const Lead = require("../models/leadModel.js");
 const Batch = require("../models/batchModel");
 const assignLeadManager = require("../utils/assignLeadManager.js");
+const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 
 // --------------------24/4/2026--------------------
 // exports.createLead = async (req, res) => {
@@ -1068,6 +1069,18 @@ exports.convertLead = async (req, res) => {
             notes: lead.paymentPlan.notes || "",
             status: "PENDING",
         });
+
+        // ✅ ADD THIS
+        try {
+            await postInvoiceJournal({
+                amount: totalAmount,
+                invoiceId: invoice._id,
+                userId: req.user._id,
+                description: `Invoice ${invoiceNumber} — Lead converted`,
+            });
+        } catch (journalErr) {
+            console.error("postInvoiceJournal failed:", journalErr.message);
+        }
 
         lead.invoiceNumber = invoiceNumber;
         await lead.save();
