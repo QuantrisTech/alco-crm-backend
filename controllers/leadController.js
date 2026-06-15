@@ -325,6 +325,97 @@ exports.createLead = async (req, res) => {
 
 
 // ─── createLeadContact (contact form se) ─────────────────────
+// exports.createLeadContact = async (req, res) => {
+//     try {
+//         const { first_name, last_name, email, phone, query } = req.body;
+
+//         if (!first_name || !email) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "First name and email are required",
+//             });
+//         }
+
+//         const cleanEmail = email.toLowerCase().trim();
+
+//         const existingLead = await Lead.findOne({ email: cleanEmail });
+//         const existingUser = await User.findOne({ email: cleanEmail });
+//         const assignedManager = await assignLeadManager();
+
+//         const plainPassword = Math.random().toString(36).slice(-8);
+//         const hashedPass = await bcrypt.hash(plainPassword, 10);
+
+//         // ── User create ya existing use karo ───────────────────
+//         let userId;
+//         if (existingUser) {
+//             userId = existingUser._id; // ← existing user ka id
+//         } else {
+//             const newUser = await User.create({
+//                 name: `${first_name} ${last_name || ""}`.trim(),
+//                 email: cleanEmail,
+//                 phone: phone || null,
+//                 password: hashedPass,
+//                 role: "user",
+//                 isVerified: true,
+//                 isActive: true,
+//                 avatarColor: generateColor(cleanEmail),
+//                 isTemporaryPassword: true,
+//             });
+//             userId = newUser._id; // ← naya user ka id
+
+//             // Sirf naye user ko credentials bhejo
+//             await sendEmailDynamic({
+//                 to: email,
+//                 subject: "Your Account Credentials 🔑",
+//                 templateName: "send-user-credentials",
+//                 replacements: {
+//                     UserName: `${first_name} ${last_name || ""}`,
+//                     UserEmail: email,
+//                     UserPassword: plainPassword,
+//                     SupportEmail: "alco@support.com",
+//                     YourCompanyName: "Al-and-co",
+//                     LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+//                 },
+//             });
+//         }
+
+//         // ── Duplicate lead check ────────────────────────────────
+//         if (existingLead) {
+//             return res.status(200).json({
+//                 success: true,
+//                 duplicate: true,
+//                 message: "Thank you! We already have your details 😊",
+//             });
+//         }
+
+
+//         // ── Naya lead banao + user_id lagao ────────────────────
+//         const lead = await Lead.create({
+//             first_name: first_name.trim(),
+//             last_name: (last_name || "").trim(),
+//             email: cleanEmail,
+//             phone: phone || null,
+//             query: query || null,
+//             source: "contact",
+//             status: "new",
+//             quality: "cold",
+//             user_id: userId, // ← ab sahi se set ho raha hai
+//             assigned_to: assignedManager,
+//         });
+
+//         return res.status(201).json({
+//             success: true,
+//             duplicate: false,
+//             message: "Thank you! We will contact you soon 😊",
+//             data: { lead_id: lead._id },
+//         });
+
+//     } catch (err) {
+//         res.status(500).json({ success: false, message: err.message });
+//     }
+// };
+
+// GET LEADS 
 exports.createLeadContact = async (req, res) => {
     try {
         const { first_name, last_name, email, phone, query } = req.body;
@@ -338,18 +429,28 @@ exports.createLeadContact = async (req, res) => {
 
         const cleanEmail = email.toLowerCase().trim();
 
+        // ── PEHLE duplicate lead check ─────────────────────────
         const existingLead = await Lead.findOne({ email: cleanEmail });
+
+        if (existingLead) {
+            return res.status(200).json({
+                success: true,
+                duplicate: true,
+                message: "Thank you! We already have your details 😊",
+            });
+        }
+
+        // ── Ab user check + create ─────────────────────────────
         const existingUser = await User.findOne({ email: cleanEmail });
         const assignedManager = await assignLeadManager();
 
-        const plainPassword = Math.random().toString(36).slice(-8);
-        const hashedPass = await bcrypt.hash(plainPassword, 10);
-
-        // ── User create ya existing use karo ───────────────────
         let userId;
         if (existingUser) {
-            userId = existingUser._id; // ← existing user ka id
+            userId = existingUser._id;
         } else {
+            const plainPassword = Math.random().toString(36).slice(-8);
+            const hashedPass = await bcrypt.hash(plainPassword, 10);
+
             const newUser = await User.create({
                 name: `${first_name} ${last_name || ""}`.trim(),
                 email: cleanEmail,
@@ -361,9 +462,8 @@ exports.createLeadContact = async (req, res) => {
                 avatarColor: generateColor(cleanEmail),
                 isTemporaryPassword: true,
             });
-            userId = newUser._id; // ← naya user ka id
+            userId = newUser._id;
 
-            // Sirf naye user ko credentials bhejo
             await sendEmailDynamic({
                 to: email,
                 subject: "Your Account Credentials 🔑",
@@ -379,17 +479,7 @@ exports.createLeadContact = async (req, res) => {
             });
         }
 
-        // ── Duplicate lead check ────────────────────────────────
-        if (existingLead) {
-            return res.status(200).json({
-                success: true,
-                duplicate: true,
-                message: "Thank you! We already have your details 😊",
-            });
-        }
-
-
-        // ── Naya lead banao + user_id lagao ────────────────────
+        // ── Lead banao ─────────────────────────────────────────
         const lead = await Lead.create({
             first_name: first_name.trim(),
             last_name: (last_name || "").trim(),
@@ -399,7 +489,7 @@ exports.createLeadContact = async (req, res) => {
             source: "contact",
             status: "new",
             quality: "cold",
-            user_id: userId, // ← ab sahi se set ho raha hai
+            user_id: userId,
             assigned_to: assignedManager,
         });
 
@@ -415,7 +505,6 @@ exports.createLeadContact = async (req, res) => {
     }
 };
 
-// GET LEADS 
 exports.getLeads = async (req, res) => {
     try {
         const {

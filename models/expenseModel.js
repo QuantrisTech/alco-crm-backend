@@ -7,7 +7,7 @@ const expenseSchema = new mongoose.Schema(
     expenseNumber: {
       type: String,
       unique: true,
-  sparse: true,
+      sparse: true,
     },
     title: {
       type: String,
@@ -37,7 +37,7 @@ const expenseSchema = new mongoose.Schema(
       required: true,
     },
     vendor: {
-      name:    { type: String, default: "" },
+      name: { type: String, default: "" },
       contact: { type: String, default: "" },
     },
     paymentMethod: {
@@ -69,7 +69,7 @@ const expenseSchema = new mongoose.Schema(
     },
     attachments: [
       {
-        url:      String,
+        url: String,
         fileType: { type: String, enum: ["image", "pdf"] },
         uploadedAt: { type: Date, default: Date.now },
       },
