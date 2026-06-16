@@ -14,6 +14,25 @@ const Batch = require("../models/batchModel");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 
+// Turnstile token verify utility
+const verifyTurnstile = async (token) => {
+    if (!token) return false;
+    try {
+        const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                secret: process.env.TURNSTILE_SECRET_KEY,
+                response: token,
+            }),
+        });
+        const data = await res.json();
+        return data.success === true;
+    } catch {
+        return false;
+    }
+};
+
 // --------------------24/4/2026--------------------
 // exports.createLead = async (req, res) => {
 //     console.log("REQ BODY:", req.body);  // ← yeh add karo
@@ -208,6 +227,11 @@ const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 // CREATE LEAD (from lead form)
 exports.createLead = async (req, res) => {
     try {
+        const isHuman = await verifyTurnstile(req.body.turnstileToken);
+        if (!isHuman) {
+            return res.status(400).json({ message: "Security check failed. Please try again." });
+        }
+
         const email = req.body.email?.toLowerCase().trim();
         const { first_name, last_name, program_id, opportunity_value: _, ...rest } = req.body;
 
@@ -419,6 +443,11 @@ exports.createLead = async (req, res) => {
 // GET LEADS 
 exports.createLeadContact = async (req, res) => {
     try {
+        const isHuman = await verifyTurnstile(req.body.turnstileToken);
+        if (!isHuman) {
+            return res.status(400).json({ message: "Security check failed. Please try again." });
+        }
+
         const { first_name, last_name, email, phone, query } = req.body;
 
         if (!first_name || !email) {
