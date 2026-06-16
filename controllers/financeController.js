@@ -95,18 +95,75 @@ exports.createInvoice = async (req, res) => {
 };
 
 // GET ALL INVOICES (with filters)
+// exports.getAllInvoices = async (req, res) => {
+//   try {
+//     const { status, userId, enrollmentId, page = 1, limit = 10 } = req.query;
+
+//     const filter = {};
+//     if (status) filter.status = status;
+//     if (userId) filter.user = userId;
+//     if (enrollmentId) filter.enrollment = enrollmentId;
+
+//     const invoices = await Invoice.find(filter)
+//       .populate("user", "name email phone")
+//       .populate({ path: "enrollment", populate: [{ path: "program", select: "name short_description" }, { path: "batch", select: "name start_date end_date" }] })
+//       .sort({ createdAt: -1 })
+//       .skip((page - 1) * limit)
+//       .limit(Number(limit));
+
+//     const total = await Invoice.countDocuments(filter);
+
+//     res.json({
+//       success: true,
+//       data: invoices,
+//       meta: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / limit) },
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.getAllInvoices = async (req, res) => {
   try {
-    const { status, userId, enrollmentId, page = 1, limit = 10 } = req.query;
+    const { status, userId, enrollmentId, search, dateFrom, dateTo, page = 1, limit = 10 } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
     if (userId) filter.user = userId;
     if (enrollmentId) filter.enrollment = enrollmentId;
 
+    // Date range filter
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    // Search by student name or email (populate ke baad filter nahi hota, isliye lookup use karenge)
+    let userIds = [];
+    if (search) {
+      const matchedUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ],
+      }).select("_id");
+      userIds = matchedUsers.map((u) => u._id);
+      filter.user = { $in: userIds };
+    }
+
     const invoices = await Invoice.find(filter)
       .populate("user", "name email phone")
-      .populate({ path: "enrollment", populate: [{ path: "program", select: "name short_description" }, { path: "batch", select: "name start_date end_date" }] })
+      .populate({
+        path: "enrollment",
+        populate: [
+          { path: "program", select: "name short_description" },
+          { path: "batch", select: "name start_date end_date" },
+        ],
+      })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
