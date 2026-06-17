@@ -121,6 +121,7 @@ const leadSchema = new mongoose.Schema(
 
     paymentPlan: {
       totalAmount: Number,
+      discount: { type: Number, default: 0 },
       advanceAmount: Number,
       advanceDueDate: Date,
       installments: [
