@@ -79,7 +79,7 @@ exports.createEnrollmentDirect = async (req, res) => {
       program,
       batch,
       // paymentPlan, // Save payment plan details
-      status: "Pending" // Set initial status to Pending
+      // status: "Pending" // Set initial status to Pending
     });
 
     res.status(201).json({
