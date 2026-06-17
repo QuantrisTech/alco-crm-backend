@@ -49,20 +49,54 @@ exports.getProfile = async (req, res) => {
 };
 
 // ✅ UPDATE OWN PROFILE
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const { name } = req.body;
+
+//     const user = await User.findByIdAndUpdate(
+//       req.user.id,
+//       { name },
+//       { new: true }
+//     ).select("-password");
+
+//     res.status(200).json({
+//       success: true,
+//       user,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 exports.updateProfile = async (req, res) => {
   try {
-    const { name } = req.body;
+    const {
+      name,
+      fatherHusbandName,
+      cnic,
+      bankAccountNumber,
+      currentAddress,
+      emergencyContactName,
+      emergencyContactPhone,
+      occupation,
+    } = req.body;
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (fatherHusbandName !== undefined) updateData.fatherHusbandName = fatherHusbandName;
+    if (cnic !== undefined) updateData.cnic = cnic;
+    if (bankAccountNumber !== undefined) updateData.bankAccountNumber = bankAccountNumber;
+    if (currentAddress !== undefined) updateData.currentAddress = currentAddress;
+    if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName;
+    if (emergencyContactPhone !== undefined) updateData.emergencyContactPhone = emergencyContactPhone;
+    if (occupation !== undefined) updateData.occupation = occupation;
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { name },
+      updateData,
       { new: true }
     ).select("-password");
 
-    res.status(200).json({
-      success: true,
-      user,
-    });
+    res.status(200).json({ success: true, user });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -75,6 +75,14 @@ const userSchema = new mongoose.Schema(
       ],
       default: "user",
     },
+    // existing schema mein, documents field se pehle ya baad mein add karo:
+    fatherHusbandName: { type: String, default: null },
+    cnic: { type: String, default: null },
+    bankAccountNumber: { type: String, default: null },
+    currentAddress: { type: String, default: null },
+    emergencyContactName: { type: String, default: null },
+    emergencyContactPhone: { type: String, default: null },
+    occupation: { type: String, default: null },
 
     is_old_user: {
       type: Boolean,
