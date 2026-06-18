@@ -535,6 +535,125 @@ exports.createLeadContact = async (req, res) => {
     }
 };
 
+exports.createLeadAdmin = async (req, res) => {
+    try {
+
+        const email = req.body.email?.toLowerCase().trim();
+        const { first_name, last_name, program_id, opportunity_value: _, ...rest } = req.body;
+
+        if (!email || !first_name || !program_id) {
+            return res.status(400).json({
+                message: "Email, first name and program are required",
+            });
+        }
+
+        // ── Auto opportunity_value from program price ──────────
+        let opportunity_value = 0;
+        if (program_id) {
+            const program = await Program.findById(program_id).select("price");
+            if (program?.price) opportunity_value = program.price;
+        }
+
+        // ── Base lead data ─────────────────────────────────────
+        const leadData = {
+            first_name,
+            last_name,
+            program_id,
+            ...rest,
+            email,
+            opportunity_value,
+            created_by: req.user?.id || null,
+        };
+
+        const assignedManager = await assignLeadManager();
+
+        // ── Step 1: Existing user check ────────────────────────
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+            // Same program check
+            const existingLead = await Lead.findOne({ email, program_id });
+
+            if (existingLead) {
+                return res.status(200).json({
+                    success: true,
+                    duplicate: true,
+                    message: "Thank you for your interest! We already have your application and will contact you soon. 😊",
+                });
+            }
+
+            // ✅ Existing user, new program → sirf lead banao, user mat banao
+            const lead = await Lead.create({
+                ...leadData,
+                user_id: existingUser._id,
+                assigned_to: assignedManager,
+            });
+
+            return res.status(201).json({
+                success: true,
+                duplicate: false,
+                message: "Thank you for applying! We'll be in touch soon. 😊",
+                data: lead,
+            });
+        }
+
+        // ── Step 2: Naya user banao ────────────────────────────
+        const plainPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+        const newUser = await User.create({
+            name: `${first_name} ${last_name || ""}`.trim(),
+            email,
+            phone: rest.phone || null,
+            password: hashedPassword,
+            role: "user",
+            isVerified: true,
+            isActive: true,
+            avatarColor: generateColor(email),
+            isTemporaryPassword: true,
+        });
+
+        // ── Step 3: Lead banao ─────────────────────────────────
+        const lead = await Lead.create({
+            ...leadData,
+            user_id: newUser._id,
+            assigned_to: assignedManager,
+        });
+
+        // ── Step 4: Credentials email bhejo ───────────────────
+        await sendEmailDynamic({
+            to: email,
+            subject: "Your Account Credentials 🔑",
+            templateName: "send-user-credentials",
+            replacements: {
+                UserName: `${first_name} ${last_name || ""}`,
+                UserEmail: email,
+                UserPassword: plainPassword,
+                SupportEmail: "alco@support.com",
+                YourCompanyName: "Al-and-co",
+                LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+            },
+        });
+
+        return res.status(201).json({
+            success: true,
+            duplicate: false,
+            message: "Thank you for applying! Check your email for login details. 😊",
+            data: lead,
+        });
+
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(200).json({
+                success: true,
+                duplicate: true,
+                message: "Thank you! We already have your details. 😊",
+            });
+        }
+        res.status(500).json({ message: error.message });
+    }
+};
+
 exports.getLeads = async (req, res) => {
     try {
         const {

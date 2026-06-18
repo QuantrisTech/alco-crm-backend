@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   createLead,
   createLeadContact,
+  createLeadAdmin,
   getMyContract,
   updateContract,
   getLeads,
@@ -29,6 +30,8 @@ router.post("/", createLead);
 
 // ✅ Public Contact Form
 router.post("/contact", createLeadContact);
+
+router.post("/admin", createLeadAdmin);
 
 // ✅ Stats rout
 router.get("/stats", protect, authorize("super_admin", "admin", "sales_manager"), getLeadsStats);
