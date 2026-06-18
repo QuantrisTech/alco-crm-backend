@@ -565,7 +565,7 @@ exports.createLeadAdmin = async (req, res) => {
             created_by: req.user?.id || null,
         };
 
-        const assignedManager = await assignLeadManager();
+        // const assignedManager = await assignLeadManager();
 
         // ── Step 1: Existing user check ────────────────────────
         const existingUser = await User.findOne({ email });
@@ -586,7 +586,7 @@ exports.createLeadAdmin = async (req, res) => {
             const lead = await Lead.create({
                 ...leadData,
                 user_id: existingUser._id,
-                assigned_to: assignedManager,
+                // assigned_to: assignedManager,
             });
 
             return res.status(201).json({
