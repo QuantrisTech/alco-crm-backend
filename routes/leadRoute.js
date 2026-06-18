@@ -74,7 +74,7 @@ router.post("/:id/activities", protect, authorize("super_admin", "admin", "sales
 router.patch("/:id/interested",  protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), markInterested);
 
 // ✅ Update Payment Plan
-router.patch("/:id/payment-plan", protect, authorize("admin","super_admin","finance_manager"), updatePaymentPlan);
+router.patch("/:id/payment-plan", protect, authorize("admin","super_admin","finance_manager", "sales_manager"), updatePaymentPlan);
 
 // ✅ Submit Contract
 router.patch("/:id/contract",  protect,  submitContract); // user khud call karega
