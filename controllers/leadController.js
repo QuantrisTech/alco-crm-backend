@@ -617,7 +617,7 @@ exports.createLeadAdmin = async (req, res) => {
         const lead = await Lead.create({
             ...leadData,
             user_id: newUser._id,
-            assigned_to: assignedManager,
+            // assigned_to: assignedManager,
         });
 
         // ── Step 4: Credentials email bhejo ───────────────────
