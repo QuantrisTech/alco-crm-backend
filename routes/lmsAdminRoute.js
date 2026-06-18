@@ -16,6 +16,7 @@ const {
 const isAdmin = authorize("admin", "super_admin");
 const isAdminAndSeo = authorize("admin", "super_admin", "seo");
 const isAdminAndSalesManager = authorize("admin", "super_admin", "sales_manager");
+const isAll = authorize("admin", "super_admin", "seo" , "sales_manager");
 
 // ✅ Public routes PEHLE — no auth
 router.post("/resources/add-book",        protect, isAdminAndSalesManager, adminAddBook);
@@ -42,7 +43,7 @@ router.delete("/live-sessions/:id",  protect, isAdmin, adminDeleteLiveSession);
 // router.delete("/resources/:id",      protect, isAdmin, adminDeleteResource);
 
 // ── Admin CRUD ───────────────────────────────────────────────
-router.get   ("/resources",          protect, isAdminAndSeo, adminGetResources);
+router.get   ("/resources",          protect, isAll, adminGetResources);
 router.get   ("/resources/:id",      protect, isAdminAndSeo, adminGetResourceById);
 router.post  ("/resources",          protect, isAdminAndSeo, uploadResourceFiles, adminCreateResource);
 router.put   ("/resources/:id",      protect, isAdminAndSeo, uploadResourceFiles, adminUpdateResource);
