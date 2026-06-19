@@ -8,6 +8,7 @@ const sendEmail = require("../utils/sendEmail.js");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
+const Lead = require("../models/leadModel.js");
 
 // Turnstile token verify utility
 const verifyTurnstile = async (token) => {
