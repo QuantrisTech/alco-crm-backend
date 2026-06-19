@@ -12,7 +12,7 @@ const router = express.Router();
 
 // ─── NORMAL AUTH ─────────────────────────────────────────────
 router.post("/register", authController.register);
-router.post("/auth", authController.login);                               // ✅ updated — identifier field
+router.post("/login", authController.login);                               // ✅ updated — identifier field
 router.get("/me", protect, authController.getMe);
 router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
