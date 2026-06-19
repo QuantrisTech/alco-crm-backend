@@ -381,7 +381,7 @@ exports.createProgramLead = async (req, res) => {
             phone: phone || null,
             email,
             opportunity_value,
-            source: "program-card",
+            source: "resource",
             created_by: req.user?.id || null,
         };
 
@@ -429,6 +429,7 @@ exports.createProgramLead = async (req, res) => {
             isActive: true,
             avatarColor: generateColor(email),
             isTemporaryPassword: true,
+            source: "resource",
         });
 
         // ── Step 3: Lead banao ─────────────────────────────────
