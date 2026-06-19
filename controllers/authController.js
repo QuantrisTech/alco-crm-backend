@@ -84,11 +84,32 @@ exports.register = async (req, res) => {
 
     const { name, email, phone, role } = req.body;
     const normalizedEmail = email?.toLowerCase().trim();
+    const cleanName = name?.trim();
 
-    if (!normalizedEmail || !name) {
-      return res.status(400).json({ message: "Name and email are required" });
+    // ── Validation ──────────────────────────────────────
+    if (!normalizedEmail || !cleanName) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and email are required",
+      });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address",
+      });
+    }
+
+    if (phone && !/^[0-9+\-\s()]{7,20}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid phone number",
+      });
+    }
+
+    // ── Duplicate user check ────────────────────────────
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(200).json({
@@ -102,7 +123,7 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
     const newUser = await User.create({
-      name,
+      name: cleanName,
       email: normalizedEmail,
       phone: phone || null,
       password: hashedPassword,
@@ -111,6 +132,26 @@ exports.register = async (req, res) => {
       isActive: true,
       avatarColor: generateColor(normalizedEmail),
       isTemporaryPassword: true,
+      source: "register",          // 👈 naya field
+    });
+
+    // ── Lead bhi banao (source = register) ──────────────
+    const assignedManager = await assignLeadManager();
+
+    const [firstName, ...rest] = cleanName.split(" ");
+    const lastName = rest.join(" ");
+
+    const lead = await Lead.create({
+      first_name: firstName,
+      last_name: lastName || "",
+      email: normalizedEmail,
+      phone: phone || null,
+      query: null,
+      source: "register",          // 👈 yahan se aaya
+      status: "new",
+      quality: "cold",
+      user_id: newUser._id,
+      assigned_to: assignedManager,
     });
 
     await sendEmailDynamic({
@@ -118,7 +159,7 @@ exports.register = async (req, res) => {
       subject: "Your Account Credentials 🔑",
       templateName: "send-user-credentials",
       replacements: {
-        UserName: name,
+        UserName: cleanName,
         UserEmail: normalizedEmail,
         UserPassword: plainPassword,
         SupportEmail: "alco@support.com",
@@ -131,7 +172,7 @@ exports.register = async (req, res) => {
       success: true,
       duplicate: false,
       message: "Registration successful. Check your email for login details. 😊",
-      data: { id: newUser._id, name: newUser.name, email: newUser.email },
+      data: { id: newUser._id, name: newUser.name, email: newUser.email, lead_id: lead._id },
     });
 
   } catch (error) {
@@ -142,7 +183,7 @@ exports.register = async (req, res) => {
         message: "You're already registered. Check your email for login details. 😊",
       });
     }
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 // ─── LOGIN (UPDATED — old_user support) ──────────────────────
