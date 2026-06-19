@@ -394,7 +394,7 @@ exports.adminGetPublicResources = async (req, res) => {
 //           UserPassword: tempPassword,
 //           SupportEmail: "alco@support.com",
 //           YourCompanyName: "Al-and-co",
-//           LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${tempPassword}`,
+//           LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${tempPassword}`,
 //         },
 //       });
 //     }
@@ -469,7 +469,7 @@ exports.requestBook = async (req, res) => {
           UserPassword: tempPassword,
           SupportEmail: "alco@support.com",
           YourCompanyName: "Al-and-co",
-          LoginLink: `${process.env.LMS_URL}/login`,
+          LoginLink: `${process.env.LMS_URL}/auth`,
         },
       });
     }

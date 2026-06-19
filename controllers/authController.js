@@ -102,7 +102,7 @@ exports.register = async (req, res) => {
         UserPassword: plainPassword,
         SupportEmail: "alco@support.com",
         YourCompanyName: "Al-and-co",
-        LoginLink: `https://app.arslanlarik.com/login?email=${normalizedEmail}&password=${plainPassword}`,
+        LoginLink: `https://app.arslanlarik.com/auth?email=${normalizedEmail}&password=${plainPassword}`,
       },
     });
 
@@ -207,7 +207,7 @@ exports.login = async (req, res) => {
           templateName: "login",
           replacements: {
             UserName: user.name,
-            SecurityLink: "https://app.arslanlarik.com/login",
+            SecurityLink: "https://app.arslanlarik.com/auth",
             YourCompanyName: "Al-and-co",
           },
         });
@@ -372,7 +372,7 @@ exports.verifyEmail = async (req, res) => {
       to: user.email,
       subject: "Welcome 🎉",
       templateName: "registration",
-      replacements: { UserName: user.name, LoginLink: process.env.CRM_FRONTEND_URL + "/login", YourCompanyName: "Al-and-co" },
+      replacements: { UserName: user.name, LoginLink: process.env.CRM_FRONTEND_URL + "/auth", YourCompanyName: "Al-and-co" },
     });
   }
 
@@ -529,7 +529,7 @@ exports.resendVerification = async (req, res) => {
 //       templateName: "login",
 //       replacements: {
 //         UserName: user.name,
-//         SecurityLink: "https://alco-crm-frontend.vercel.app/login",
+//         SecurityLink: "https://alco-crm-frontend.vercel.app/auth",
 //         YourCompanyName: "Al-and-co"
 //       }
 //     });
@@ -674,7 +674,7 @@ exports.resendVerification = async (req, res) => {
 //     templateName: "registration",
 //     replacements: {
 //       UserName: user.name,
-//       LoginLink: "http://localhost:3000/login",
+//       LoginLink: "http://localhost:3000/auth",
 //       YourCompanyName: "Al-and-co"
 //     }
 //   });

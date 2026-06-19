@@ -114,7 +114,7 @@ const verifyTurnstile = async (token) => {
 //                 UserPassword: plainPassword,
 //                 SupportEmail: "alco@support.com",
 //                 YourCompanyName: "Al-and-co",
-//                 LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${plainPassword}`,
+//                 LoginLink: `https://alco-crm-frontend.vercel.app/auth?email=${email}&password=${plainPassword}`,
 //             },
 //         });
 
@@ -208,7 +208,7 @@ const verifyTurnstile = async (token) => {
 //                 UserPassword: plainPassword,
 //                 SupportEmail: "alco@support.com",
 //                 YourCompanyName: "Al-and-co",
-//                 LoginLink: `https://alco-crm-frontend.vercel.app/login?email=${email}&password=${plainPassword}`,
+//                 LoginLink: `https://alco-crm-frontend.vercel.app/auth?email=${email}&password=${plainPassword}`,
 //             },
 //         });
 
@@ -325,7 +325,7 @@ exports.createLead = async (req, res) => {
                 UserPassword: plainPassword,
                 SupportEmail: "alco@support.com",
                 YourCompanyName: "Al-and-co",
-                LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+                LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
             },
         });
 
@@ -399,7 +399,7 @@ exports.createLead = async (req, res) => {
 //                     UserPassword: plainPassword,
 //                     SupportEmail: "alco@support.com",
 //                     YourCompanyName: "Al-and-co",
-//                     LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+//                     LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
 //                 },
 //             });
 //         }
@@ -504,7 +504,7 @@ exports.createLeadContact = async (req, res) => {
                     UserPassword: plainPassword,
                     SupportEmail: "alco@support.com",
                     YourCompanyName: "Al-and-co",
-                    LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+                    LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
                 },
             });
         }
@@ -631,7 +631,7 @@ exports.createLeadAdmin = async (req, res) => {
                 UserPassword: plainPassword,
                 SupportEmail: "alco@support.com",
                 YourCompanyName: "Al-and-co",
-                LoginLink: `https://app.arslanlarik.com/login?email=${email}&password=${plainPassword}`,
+                LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
             },
         });
 

@@ -160,6 +160,20 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // userModel.js me add karo
+    legacyPrograms: [
+      {
+        program: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Program",
+        },
+        isGraduate: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
+
     documents: [
       {
         type: {

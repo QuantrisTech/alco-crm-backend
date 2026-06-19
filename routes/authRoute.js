@@ -12,7 +12,7 @@ const router = express.Router();
 
 // ─── NORMAL AUTH ─────────────────────────────────────────────
 router.post("/register", authController.register);
-router.post("/login", authController.login);                               // ✅ updated — identifier field
+router.post("/auth", authController.login);                               // ✅ updated — identifier field
 router.get("/me", protect, authController.getMe);
 router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
@@ -29,7 +29,7 @@ router.get("/google", passport.authenticate("google", { scope: ["profile", "emai
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", { session: false, failureRedirect: "/login" }),
+  passport.authenticate("google", { session: false, failureRedirect: "/auth" }),
   (req, res) => {
     try {
       const token = generateToken(req.user);
@@ -58,7 +58,7 @@ router.get("/linkedin", (req, res) => {
 
 router.get("/linkedin/callback", async (req, res) => {
   const { code } = req.query;
-  if (!code) return res.redirect(`${process.env.CRM_FRONTEND_URL}/login?error=linkedin_failed`);
+  if (!code) return res.redirect(`${process.env.CRM_FRONTEND_URL}/auth?error=linkedin_failed`);
 
   try {
     const tokenRes = await axios.post(
@@ -81,7 +81,7 @@ router.get("/linkedin/callback", async (req, res) => {
     res.redirect(`${frontend}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify(user))}`);
   } catch (err) {
     console.error("LinkedIn OAuth error:", err.response?.data || err.message);
-    res.redirect(`${process.env.CRM_FRONTEND_URL}/login?error=linkedin_failed`);
+    res.redirect(`${process.env.CRM_FRONTEND_URL}/auth?error=linkedin_failed`);
   }
 });
 
@@ -108,7 +108,7 @@ module.exports = router;
 
 // // ================= NORMAL AUTH =================
 // router.post("/register", authController.register);
-// router.post("/login", authController.login);
+// router.post("/auth", authController.login);
 // router.get("/me", protect, authController.getMe);
 // router.post("/forgot-password", authController.forgotPassword);
 // router.post("/reset-password", authController.resetPassword);
@@ -128,7 +128,7 @@ module.exports = router;
 //   "/google/callback",
 //   passport.authenticate("google", {
 //     session: false,
-//     failureRedirect: "/login",
+//     failureRedirect: "/auth",
 //   }),
 //   (req, res) => {
 //     try {
@@ -168,7 +168,7 @@ module.exports = router;
 // //   "/linkedin/callback",
 // //   passport.authenticate("linkedin", {
 // //     session: false,
-// //     failureRedirect: "/login",
+// //     failureRedirect: "/auth",
 // //   }),
 // //   (req, res) => {
 // //     const token = generateToken(req.user);
@@ -197,7 +197,7 @@ module.exports = router;
 //   const { code } = req.query;
 
 //   if (!code) {
-//     return res.redirect(`${process.env.CRM_FRONTEND_URL}/login?error=linkedin_failed`);
+//     return res.redirect(`${process.env.CRM_FRONTEND_URL}/auth?error=linkedin_failed`);
 //   }
 
 //   try {
@@ -244,7 +244,7 @@ module.exports = router;
 //     );
 //   } catch (err) {
 //     console.error("LinkedIn OAuth error:", err.response?.data || err.message);
-//     res.redirect(`${process.env.CRM_FRONTEND_URL}/login?error=linkedin_failed`);
+//     res.redirect(`${process.env.CRM_FRONTEND_URL}/auth?error=linkedin_failed`);
 //   }
 // });
 
