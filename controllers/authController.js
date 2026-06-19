@@ -8,53 +8,122 @@ const sendEmail = require("../utils/sendEmail.js");
 const generateColor = require("../utils/generateColor.js");
 
 // ─── REGISTER ────────────────────────────────────────────────
+// exports.register = async (req, res) => {
+//   try {
+//     const { name, email, password, role } = req.body;
+
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser)
+//       return res.status(400).json({ message: "User already exists" });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     const verificationToken = crypto.randomBytes(32).toString("hex");
+//     const avatarColor = generateColor(email);
+
+//     const user = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       role,
+//       verificationToken,
+//       isVerified: false,
+//       isActive: false,
+//       avatarColor,
+//     });
+
+//     // ✅ Email fail ho toh bhi registration complete ho
+//     try {
+//       const verificationUrl = `${process.env.BACKEND_BASE_URL}/api/auth/verify-email/${verificationToken}`;
+//       await sendEmail({
+//         to: user.email,
+//         subject: "Verify your email ✅",
+//         templateName: "verify",
+//         replacements: {
+//           UserName: user.name,
+//           VerifyLink: verificationUrl,
+//           YourCompanyName: "Al-and-co",
+//         },
+//       });
+//     } catch (emailError) {
+//       console.error("Verification email send nahi hua:", emailError.message);
+//       // Silent fail — user ban gaya, email baad mein resend kar sakte ho
+//     }
+
+//     res.status(201).json({ success: true, message: "Registration successful. Verification email bhej di gayi hai (agar available ho)." });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ message: "User already exists" });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const avatarColor = generateColor(email);
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role,
-      verificationToken,
-      isVerified: false,
-      isActive: false,
-      avatarColor,
-    });
-
-    // ✅ Email fail ho toh bhi registration complete ho
-    try {
-      const verificationUrl = `${process.env.BACKEND_BASE_URL}/api/auth/verify-email/${verificationToken}`;
-      await sendEmail({
-        to: user.email,
-        subject: "Verify your email ✅",
-        templateName: "verify",
-        replacements: {
-          UserName: user.name,
-          VerifyLink: verificationUrl,
-          YourCompanyName: "Al-and-co",
-        },
-      });
-    } catch (emailError) {
-      console.error("Verification email send nahi hua:", emailError.message);
-      // Silent fail — user ban gaya, email baad mein resend kar sakte ho
+    const isHuman = await verifyTurnstile(req.body.turnstileToken);
+    if (!isHuman) {
+      return res.status(400).json({ message: "Security check failed. Please try again." });
     }
 
-    res.status(201).json({ success: true, message: "Registration successful. Verification email bhej di gayi hai (agar available ho)." });
+    const { name, email, phone, role } = req.body;
+    const normalizedEmail = email?.toLowerCase().trim();
+
+    if (!normalizedEmail || !name) {
+      return res.status(400).json({ message: "Name and email are required" });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        message: "You're already registered. Check your email for login details. 😊",
+      });
+    }
+
+    const plainPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    const newUser = await User.create({
+      name,
+      email: normalizedEmail,
+      phone: phone || null,
+      password: hashedPassword,
+      role: role || "user",
+      isVerified: true,
+      isActive: true,
+      avatarColor: generateColor(normalizedEmail),
+      isTemporaryPassword: true,
+    });
+
+    await sendEmailDynamic({
+      to: normalizedEmail,
+      subject: "Your Account Credentials 🔑",
+      templateName: "send-user-credentials",
+      replacements: {
+        UserName: name,
+        UserEmail: normalizedEmail,
+        UserPassword: plainPassword,
+        SupportEmail: "alco@support.com",
+        YourCompanyName: "Al-and-co",
+        LoginLink: `https://app.arslanlarik.com/login?email=${normalizedEmail}&password=${plainPassword}`,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      duplicate: false,
+      message: "Registration successful. Check your email for login details. 😊",
+      data: { id: newUser._id, name: newUser.name, email: newUser.email },
+    });
+
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        message: "You're already registered. Check your email for login details. 😊",
+      });
+    }
     res.status(500).json({ message: error.message });
   }
 };
-
 // ─── LOGIN (UPDATED — old_user support) ──────────────────────
 exports.login = async (req, res) => {
   try {
