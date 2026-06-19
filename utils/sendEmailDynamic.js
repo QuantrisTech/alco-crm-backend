@@ -43,7 +43,7 @@
 //     }
 
 //     const mailOptions = {
-//         from: `"${process.env.EMAIL_FROM_NAME || "AL&CO"}" <${process.env.EMAIL_USER}>`,
+//         from: `"${process.env.EMAIL_USER || "AL&CO"}" <${process.env.EMAIL_USER}>`,
 //         to: options.to,
 //         subject: options.subject,
 //         html: htmlContent || undefined,
@@ -91,7 +91,7 @@ const sendEmailDynamic = async (options) => {
     }
 
     await resend.emails.send({
-        from: `${process.env.EMAIL_FROM_NAME || "AL&CO"} <connect@arslanlarik.com>`,
+        from: `${process.env.EMAIL_USER || "AL&CO"} <connect@arslanlarik.com>`,
         to: options.to,
         subject: options.subject,
         html: htmlContent || undefined,
