@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { generateToken, generateRefreshToken } = require("../utils/generateToken.js");
 const sendEmail = require("../utils/sendEmail.js");
+const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor.js");
 
 // Turnstile token verify utility
