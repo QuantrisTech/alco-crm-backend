@@ -2,31 +2,84 @@ const User = require("../models/userModel.js");
 const bcrypt = require("bcryptjs");
 
 // ✅ GET ALL USERS 
+// exports.getAllUsers = async (req, res) => {
+//   try {
+//     const requesterRole = req.user.role;
+
+//     let query = {};
+
+//     if (requesterRole === "admin") {
+//       // Admin: see all except admins
+//       query = {
+//         role: { $nin: ["super_admin", "admin"] },
+//       };
+//     }
+//     else if (requesterRole === "sales_manager") {
+//       // Sales manager: see only reps + normal users
+//       query = {
+//         role: { $in: ["sales_rep", "user"] },
+//       };
+//     }
+//     // super_admin → no query filter (see all)
+
+//     const users = await User.find(query).select("-password");
+
+//     res.status(200).json({
+//       success: true,
+//       count: users.length,
+//       users,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 exports.getAllUsers = async (req, res) => {
   try {
     const requesterRole = req.user.role;
+    const { page = 1, limit = 10, search, role } = req.query;
 
     let query = {};
 
     if (requesterRole === "admin") {
-      // Admin: see all except admins
-      query = {
-        role: { $nin: ["super_admin", "admin"] },
-      };
+      query.role = { $nin: ["super_admin", "admin"] };
+    } else if (requesterRole === "sales_manager") {
+      query.role = { $in: ["sales_rep", "user"] };
     }
-    else if (requesterRole === "sales_manager") {
-      // Sales manager: see only reps + normal users
-      query = {
-        role: { $in: ["sales_rep", "user"] },
-      };
-    }
-    // super_admin → no query filter (see all)
+    // super_admin → no restriction
 
-    const users = await User.find(query).select("-password");
+    // ── Role filter (sales_manager apne allowed roles ke andar hi filter kar sake) ──
+    if (role) {
+      if (requesterRole === "sales_manager") {
+        if (["sales_rep", "user"].includes(role)) query.role = role;
+      } else {
+        query.role = role;
+      }
+    }
+
+    // ── Search ──
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select("-password")
+        .skip(skip)
+        .limit(Number(limit))
+        .sort({ createdAt: -1 }),
+      User.countDocuments(query),
+    ]);
 
     res.status(200).json({
       success: true,
       count: users.length,
+      total,
+      totalPages: Math.ceil(total / Number(limit)),
       users,
     });
   } catch (error) {
