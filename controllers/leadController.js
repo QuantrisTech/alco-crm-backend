@@ -1141,6 +1141,23 @@ exports.convertLead = async (req, res) => {
             ? await Batch.findById(lead.batch_id).select("name start_date end_date")
             : null;
 
+        // ── Step 1.5: Already enrolled? (check BEFORE mutating lead) ──
+        const existingUser = await User.findOne({ email: lead.email });
+        if (existingUser) {
+            const existingEnrollment = await Enrollment.findOne({
+                user: existingUser._id,
+                program: lead.program_id,
+            });
+
+            if (existingEnrollment) {
+                return res.status(409).json({
+                    success: false,
+                    message: "User is already enrolled in this program.",
+                    data: { enrollmentId: existingEnrollment._id },
+                });
+            }
+        }
+
         // ── Step 2: Lead convert + save ───────────────────────────
         lead.status = "converted";
         await lead.save();
@@ -1148,7 +1165,7 @@ exports.convertLead = async (req, res) => {
         // ── Step 3: User banao ────────────────────────────────────
         const crypto = require("crypto");
         const tempPassword = crypto.randomBytes(8).toString("hex");
-        let user = await User.findOne({ email: lead.email });
+        let user = existingUser;
         let isNewUser = false;
 
         if (!user) {
@@ -1168,6 +1185,19 @@ exports.convertLead = async (req, res) => {
         lead.user_id = user._id;
         await lead.save();
 
+        const existingEnrollment = await Enrollment.findOne({
+            user: user._id,
+            program: lead.program_id,
+        });
+
+        if (existingEnrollment) {
+            return res.status(409).json({
+                success: false,
+                message: "User is already enrolled in this program.",
+                data: { enrollmentId: existingEnrollment._id },
+            });
+        }
+
         // ── Step 4: Enrollment banao ──────────────────────────────
         const enrollment = await Enrollment.create({
             user: user._id,
@@ -1176,7 +1206,7 @@ exports.convertLead = async (req, res) => {
             status: "active",
             accessStatus: "RESTRICTED",
             assigned_to: lead.assigned_to,
-            assigned_to: lead.assigned_to,
+            // assigned_to: lead.assigned_to,
         });
 
         // ── Step 5: Invoice Number ────────────────────────────────
