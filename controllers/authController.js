@@ -12,21 +12,21 @@ const Lead = require("../models/leadModel.js");
 
 // Turnstile token verify utility
 const verifyTurnstile = async (token) => {
-    if (!token) return false;
-    try {
-        const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                secret: process.env.TURNSTILE_SECRET_KEY,
-                response: token,
-            }),
-        });
-        const data = await res.json();
-        return data.success === true;
-    } catch {
-        return false;
-    }
+  if (!token) return false;
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secret: process.env.TURNSTILE_SECRET_KEY,
+        response: token,
+      }),
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch {
+    return false;
+  }
 };
 
 
@@ -208,7 +208,7 @@ exports.login = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Wrong email or username" });
     }
 
     // ✅ OLD USER — password skip, seedha login
@@ -251,7 +251,7 @@ exports.login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Wrong password" });
     }
 
     await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
@@ -371,23 +371,27 @@ exports.getMe = async (req, res) => {
 
 // ─── FORGOT PASSWORD ─────────────────────────────────────────
 exports.forgotPassword = async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  if (!user) return res.status(404).json({ message: "User not found" });
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  user.resetPasswordToken = otp;
-  user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
-  user.resetPasswordAttempts = 0;
-  await user.save();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordToken = otp;
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordAttempts = 0;
+    await user.save();
 
-  await sendEmail({
-    to: user.email,
-    subject: "Reset Password OTP 🔑",
-    templateName: "forgot-password",
-    replacements: { UserName: user.name, OTP: otp, YourCompanyName: "Al-and-co" },
-  });
+    await sendEmail({
+      to: user.email,
+      subject: "Reset Password OTP 🔑",
+      templateName: "forgot-password",
+      replacements: { UserName: user.name, OTP: otp, YourCompanyName: "Al-and-co" },
+    });
 
-  res.json({ success: true, message: "OTP sent to your email. It expires in 10 minutes." });
+    res.json({ success: true, message: "OTP sent to your email. It expires in 10 minutes." });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─── RESET PASSWORD ──────────────────────────────────────────
@@ -410,8 +414,8 @@ exports.resetPassword = async (req, res) => {
   user.resetPasswordToken = undefined;
   user.resetPasswordExpire = undefined;
   user.resetPasswordAttempts = 0;
-  user.isTemporaryPassword = false;   
-  user.needsAccountSetup = false; 
+  user.isTemporaryPassword = false;
+  user.needsAccountSetup = false;
   await user.save();
 
   res.json({ success: true, message: "Password reset successfully" });
