@@ -113,7 +113,7 @@ const sendEmail = async (options) => {
   }
 
   await resend.emails.send({
-    from: `${process.env.EMAIL_FROM_NAME || "AL&CO"} <noreply@arslanlarik.com>`,
+    from: `${process.env.EMAIL_FROM_NAME || "AL&CO"} <connect@arslanlarik.com>`,
     to: options.to,
     subject: options.subject,
     html: htmlContent || undefined,
