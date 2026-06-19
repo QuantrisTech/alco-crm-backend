@@ -13,7 +13,7 @@ exports.createEnrollment = async (req, res) => {
         message: "User, Program, and Payment Plan are required",
       });
     }
-    
+
 
 
     const existing = await Enrollment.findOne({ user, program });
@@ -78,6 +78,7 @@ exports.createEnrollmentDirect = async (req, res) => {
       user,
       program,
       batch,
+      assigned_to: req.user._id,
       // paymentPlan, // Save payment plan details
       // status: "Pending" // Set initial status to Pending
     });
