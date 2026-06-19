@@ -5,6 +5,7 @@ const {
   createLead,
   createLeadContact,
   createLeadAdmin,
+  createProgramLead,
   getMyContract,
   updateContract,
   getLeads,
@@ -32,6 +33,8 @@ router.post("/", createLead);
 router.post("/contact", createLeadContact);
 
 router.post("/admin", createLeadAdmin);
+
+router.post("/program", createProgramLead);
 
 // ✅ Stats rout
 router.get("/stats", protect, authorize("super_admin", "admin", "sales_manager"), getLeadsStats);

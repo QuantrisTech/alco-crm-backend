@@ -14,6 +14,7 @@ const Batch = require("../models/batchModel");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 
+
 // Turnstile token verify utility
 const verifyTurnstile = async (token) => {
     if (!token) return false;
@@ -321,6 +322,129 @@ exports.createLead = async (req, res) => {
             templateName: "send-user-credentials",
             replacements: {
                 UserName: `${first_name} ${last_name || ""}`,
+                UserEmail: email,
+                UserPassword: plainPassword,
+                SupportEmail: "alco@support.com",
+                YourCompanyName: "Al-and-co",
+                LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
+            },
+        });
+
+        return res.status(201).json({
+            success: true,
+            duplicate: false,
+            message: "Thank you for applying! Check your email for login details. 😊",
+            data: lead,
+        });
+
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(200).json({
+                success: true,
+                duplicate: true,
+                message: "Thank you! We already have your details. 😊",
+            });
+        }
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.createProgramLead = async (req, res) => {
+    try {
+        const isHuman = await verifyTurnstile(req.body.turnstileToken);
+        if (!isHuman) {
+            return res.status(400).json({ message: "Security check failed. Please try again." });
+        }
+
+        const email = req.body.email?.toLowerCase().trim();
+        const { name, phone, programId } = req.body;
+
+        if (!email || !name || !programId) {
+            return res.status(400).json({
+                message: "Name, email and program are required",
+            });
+        }
+
+        const nameParts = name.trim().split(" ");
+        const first_name = nameParts[0];
+        const last_name = nameParts.slice(1).join(" ") || "";
+
+        // ── Auto opportunity_value from program price ──────────
+        let opportunity_value = 0;
+        const program = await Program.findById(programId).select("price");
+        if (program?.price) opportunity_value = program.price;
+
+        const leadData = {
+            first_name,
+            last_name,
+            program_id: programId,
+            phone: phone || null,
+            email,
+            opportunity_value,
+            source: "program-card",
+            created_by: req.user?.id || null,
+        };
+
+        const assignedManager = await assignLeadManager();
+
+        // ── Step 1: Existing user check ────────────────────────
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+            const existingLead = await Lead.findOne({ email, program_id: programId });
+
+            if (existingLead) {
+                return res.status(200).json({
+                    success: true,
+                    duplicate: true,
+                    message: "Thank you for your interest! We already have your application and will contact you soon. 😊",
+                });
+            }
+
+            const lead = await Lead.create({
+                ...leadData,
+                user_id: existingUser._id,
+                assigned_to: assignedManager,
+            });
+
+            return res.status(201).json({
+                success: true,
+                duplicate: false,
+                message: "Thank you for applying! We'll be in touch soon. 😊",
+                data: lead,
+            });
+        }
+
+        // ── Step 2: Naya user banao ────────────────────────────
+        const plainPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+        const newUser = await User.create({
+            name: `${first_name} ${last_name}`.trim(),
+            email,
+            phone: phone || null,
+            password: hashedPassword,
+            role: "user",
+            isVerified: true,
+            isActive: true,
+            avatarColor: generateColor(email),
+            isTemporaryPassword: true,
+        });
+
+        // ── Step 3: Lead banao ─────────────────────────────────
+        const lead = await Lead.create({
+            ...leadData,
+            user_id: newUser._id,
+            assigned_to: assignedManager,
+        });
+
+        // ── Step 4: Credentials email bhejo ───────────────────
+        await sendEmailDynamic({
+            to: email,
+            subject: "Your Account Credentials 🔑",
+            templateName: "send-user-credentials",
+            replacements: {
+                UserName: `${first_name} ${last_name}`,
                 UserEmail: email,
                 UserPassword: plainPassword,
                 SupportEmail: "alco@support.com",
