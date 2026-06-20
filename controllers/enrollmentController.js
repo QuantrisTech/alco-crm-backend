@@ -1,6 +1,6 @@
 // controllers/enrollmentController.js
 const Enrollment = require("../models/enrollmentModel.js");
-
+const Invoice = require("../models/invoiceModel.js");
 
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
@@ -286,10 +286,31 @@ exports.getAllEnrollments = async (req, res) => {
 };
 
 // SINGLE
+// exports.getEnrollmentById = async (req, res) => {
+//   try {
+//     const enrollment = await Enrollment.findById(req.params.id)
+//       .populate("user program batch");
+
+//     if (!enrollment) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Enrollment not found",
+//       });
+//     }
+
+//     res.json({ success: true, data: enrollment });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+// SINGLE
 exports.getEnrollmentById = async (req, res) => {
   try {
     const enrollment = await Enrollment.findById(req.params.id)
-      .populate("user program batch");
+      .populate("user", "name email phone role")
+      .populate("program")
+      .populate("batch")
+      .populate("assigned_to", "name email role");
 
     if (!enrollment) {
       return res.status(404).json({
@@ -298,7 +319,93 @@ exports.getEnrollmentById = async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: enrollment });
+    const Invoice = require("../models/invoiceModel.js");
+    const Payment = require("../models/paymentModel.js");
+
+    const invoices = await Invoice.find({ enrollment: enrollment._id }).sort({
+      createdAt: -1,
+    });
+
+    const payments = await Payment.find({
+      invoice: { $in: invoices.map((inv) => inv._id) },
+    }).sort({ createdAt: -1 });
+
+    // ─── Build unified timeline ───────────────────────────────
+    const timeline = [];
+
+    // 1) Lead activities (call, email, meeting, note)
+    const leadActivities = enrollment.leadSnapshot?.activities || [];
+    leadActivities.forEach((a) => {
+      timeline.push({
+        type: a.activity_type, // call | email | meeting | note
+        title: a.title,
+        description: a.description,
+        meta: {
+          call_duration_minutes: a.call_duration_minutes,
+          call_outcome: a.call_outcome,
+          email_subject: a.email_subject,
+          meeting_link: a.meeting_link,
+          meeting_location: a.meeting_location,
+        },
+        date: a.createdAt,
+      });
+    });
+
+    // 2) Contract signed
+    if (enrollment.leadSnapshot?.contractDetails?.signedAt) {
+      timeline.push({
+        type: "contract",
+        title: "Contract Signed",
+        description: `${enrollment.leadSnapshot.contractDetails.fullName} signed the contract`,
+        date: enrollment.leadSnapshot.contractDetails.signedAt,
+      });
+    }
+
+    // 3) Enrollment created
+    timeline.push({
+      type: "enrollment",
+      title: "Enrollment Created",
+      description: `Enrolled in ${enrollment.program?.name || "program"}`,
+      date: enrollment.enrolledAt || enrollment.createdAt,
+    });
+
+    // 4) Invoices
+    invoices.forEach((inv) => {
+      timeline.push({
+        type: "invoice",
+        title: `Invoice ${inv.invoiceNumber} Created`,
+        description: `Total: ${inv.totalAmount} | Status: ${inv.status}`,
+        date: inv.createdAt,
+      });
+    });
+
+    // 5) Payments
+    payments.forEach((p) => {
+      timeline.push({
+        type: "payment",
+        title: `Payment ${p.status === "approved" ? "Received" : p.status}`,
+        description: p.notes || `Amount: ${p.amount} via ${p.method}`,
+        meta: {
+          amount: p.amount,
+          method: p.method,
+          status: p.status,
+        },
+        date: p.approvedAt || p.createdAt,
+      });
+    });
+
+    // Sort newest → oldest
+    timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json({
+      success: true,
+      data: {
+        ...enrollment.toObject(),
+        invoices,
+        payments,
+        timeline,
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
