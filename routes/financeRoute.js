@@ -63,8 +63,8 @@ router.post(
   addInstallment
 );
 
-router.post("/invoices/:id/send-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendInvoiceEmail);
-router.post("/invoices/:id/send-receiving-invoice", protect, authorize("finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
+router.post("/invoices/:id/send-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendInvoiceEmail);
+router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
 router.get(
   "/invoices/sales",
   protect,

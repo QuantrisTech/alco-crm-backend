@@ -1211,6 +1211,11 @@ exports.sendInvoiceEmail = async (req, res) => {
     if (!invoice)
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
+    // ✅ AUTHORIZATION CHECK — yahan rakho
+    if (req.user.role === "user" && invoice.user._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
     const user = invoice.user;
     const program = invoice.enrollment?.program;
 
