@@ -1,6 +1,7 @@
 // controllers/auditController.js
 
 const AuditLog = require("../models/auditModel.js");
+const User = require("../models/userModel.js");
 
 // GET ALL AUDIT LOGS (Admin / Super Admin only)
 // exports.getAllAuditLogs = async (req, res) => {
