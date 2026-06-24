@@ -24,7 +24,7 @@ module.exports = `<!DOCTYPE html>
                 <tr>
                   <div style="display: flex; align-items:flex-start; justify-content: space-between;">
                     <div>
-                      <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_auto/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
+                      <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
                         style="height:55px;width:auto;display:block;" />
                       <p style="font-size:18px; font-weight:600; color:#ffffff; text-align: left; line-height: 2px;">
                         Your account role has been updated

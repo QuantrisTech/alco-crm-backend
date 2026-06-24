@@ -19,7 +19,7 @@ module.exports = `<!DOCTYPE html>
             <td
               style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:30px 40px 30px;text-align:center; display: flex; flex-direction: column; align-items: center; position: relative;">
               <div style="position: absolute; top: 15px; left: 25px; z-index: 1;">
-                <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_auto/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
+                <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
                   style="height:35px;width:auto;display:block;" />
               </div>
               <div

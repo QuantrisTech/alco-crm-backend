@@ -23,7 +23,7 @@ module.exports = `
               </td>
               <td style="vertical-align:middle;padding-left:12px;display:flex;flex-direction:column;align-items:flex-start; gap: 4px;">
                 <!-- <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;line-height:1;">ALCO</div> -->
-              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_auto/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;" />
+              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;" />
                 <div style="font-size:11px;color:#94a3b8;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">Academy of Life Coaching</div>
               </td>
             </tr>
