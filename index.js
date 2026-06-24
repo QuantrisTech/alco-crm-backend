@@ -352,7 +352,7 @@ app.use("/api/v1/notifications", notificationRoute);
 // Admin Account Routes
 app.use("/api/v1/accounts", accountRoute);
 app.use("/api/v1/reports", reportRoute);
-app.use("/api/v1/guide", guideRoute);
+app.use("/api/v1/guides", guideRoute);
 
 
 // ======================
