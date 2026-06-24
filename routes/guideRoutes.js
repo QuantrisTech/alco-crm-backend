@@ -2,15 +2,18 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  getGuideByPageKey,
-  getAllGuides,
-  upsertGuide,
-  deleteGuide,
+    getActiveGuides,
+    getGuideByPageKey,
+    getAllGuides,
+    upsertGuide,
+    deleteGuide,
 } = require("../controllers/guideController");
 const { getGuideUploadSignature } = require("../controllers/uploadController");
 
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
+
+router.get("/", protect, getActiveGuides);
 
 router.get("/admin/all", protect, authorize("admin", "super_admin"), getAllGuides);
 router.get("/upload-signature", protect, authorize("admin", "super_admin"), getGuideUploadSignature);

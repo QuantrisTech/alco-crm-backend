@@ -51,3 +51,15 @@ exports.deleteGuide = async (req, res) => {
     }
 };
 
+// controllers/guideController.js — add this
+exports.getActiveGuides = async (req, res) => {
+  try {
+    const guides = await Guide.find({ isActive: true })
+      .select("pageKey heading")
+      .sort({ heading: 1 });
+    res.json({ data: guides });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
