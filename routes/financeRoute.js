@@ -29,7 +29,8 @@ const {
   getRevenueReport,
   getMonthlyCollections,
   getPendingReport,
-  searchEnrollments
+  searchEnrollments, 
+  sendReceivingReportEmail,
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
@@ -88,7 +89,12 @@ router.post("/extension", protect, authorize("finance_manager", "admin", "super_
 router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "super_admin"), getRevenueReport);
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
-
+router.post(
+  "/receiving/export-email",
+  protect,
+  authorize("admin", "super_admin", "finance_manager"), // adjust roles as per your access rules
+  sendReceivingReportEmail
+);
 
 module.exports = router;
 

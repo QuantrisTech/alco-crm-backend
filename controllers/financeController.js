@@ -722,8 +722,6 @@ exports.addInstallment = async (req, res) => {
   }
 };
 
-
-
 // UPDATE INVOICE
 exports.updateInvoice = async (req, res) => {
   try {
@@ -745,6 +743,28 @@ exports.updateInvoice = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+// controllers/invoiceController.js
+exports.sendReceivingReportEmail = async (req, res) => {
+  await connectDB();
+  const { invoiceIds, filters } = req.body;
+
+  const query = invoiceIds?.length
+    ? { _id: { $in: invoiceIds } }
+    : buildInvoiceFilterQuery(filters); // existing filter-builder helper reuse karo
+
+  const invoices = await Invoice.find(query)
+    .populate("user", "name email")
+    .populate({ path: "enrollment", populate: { path: "program", select: "name" } });
+
+  const admins = await User.find({ role: { $in: ["admin", "super_admin"] } }).select("email name");
+
+  const html = receivingReportEmailTemplate(invoices); // JS module template
+
+  await Promise.all(admins.map((a) => sendEmail({ to: a.email, subject: "Receiving Report", html })));
+
+  res.json({ success: true, message: `Report sent to ${admins.length} admin(s)` });
 };
 
 // ─────────────────────────────────────────────
