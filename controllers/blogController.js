@@ -112,23 +112,93 @@ exports.adminGetBlogs = async (req, res) => {
   }
 };
 
+// exports.adminCreateBlog = async (req, res) => {
+//   try {
+//     const { title } = req.body;
+//     const slug = title.toLowerCase().replace(/ /g, '-'); // Generate slug from title
+ 
+//     // Check for existing title or slug
+//     const existingBlog = await Blog.findOne({ $or: [{ title }, { slug }] });
+ 
+//     if (existingBlog) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: "Blog with this title or slug already exists" 
+//       });
+//     }
+ 
+//     // Create new blog
+//     const newBlog = await Blog.create({ title, slug });
+//     res.status(201).json({ success: true, message: "Blog created", data: newBlog });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+// // Export other functions as needed
+// exports.adminUpdateBlog = async (req, res) => {
+//   try {
+//     const { title } = req.body;
+//     const slug = title.toLowerCase().replace(/ /g, '-'); // Generate new slug based on updated title
+ 
+//     // Check if the blog exists
+//     const existingBlog = await Blog.findOne({ slug: req.params.slug });
+ 
+//     if (!existingBlog) {
+//       return res.status(404).json({ success: false, message: "Blog not found" });
+//     }
+ 
+//     // Check for existing title or slug in other blogs excluding the current one
+//     const duplicateBlog = await Blog.findOne({
+//       $or: [{ title }, { slug }],
+//       _id: { $ne: existingBlog._id } // Exclude the current blog
+//     });
+ 
+//     if (duplicateBlog) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: "Another blog with this title or slug already exists" 
+//       });
+//     }
+ 
+//     // Update the blog
+//     existingBlog.title = title;
+//     existingBlog.slug = slug; // Update to new slug
+//     const updatedBlog = await existingBlog.save();
+ 
+//     res.status(200).json({ success: true, message: "Blog updated", data: updatedBlog });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.adminCreateBlog = async (req, res) => {
   try {
-    const { title } = req.body;
-    const slug = title.toLowerCase().replace(/ /g, '-'); // Generate slug from title
- 
-    // Check for existing title or slug
+    const { title, status, content, thumbnail, category, tags, excerpt, read_time, is_featured } = req.body;
+    const slug = title.toLowerCase().replace(/ /g, '-');
+
     const existingBlog = await Blog.findOne({ $or: [{ title }, { slug }] });
- 
     if (existingBlog) {
       return res.status(400).json({ 
         success: false, 
         message: "Blog with this title or slug already exists" 
       });
     }
- 
-    // Create new blog
-    const newBlog = await Blog.create({ title, slug });
+
+    const newBlog = await Blog.create({
+      title,
+      slug,
+      status,
+      content,
+      thumbnail,
+      category,
+      tags,
+      excerpt,
+      read_time,
+      is_featured,
+      author: req.user?._id, // agar protect middleware se user mil raha hai
+    });
+
     res.status(201).json({ success: true, message: "Blog created", data: newBlog });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -138,34 +208,43 @@ exports.adminCreateBlog = async (req, res) => {
 // Export other functions as needed
 exports.adminUpdateBlog = async (req, res) => {
   try {
-    const { title } = req.body;
-    const slug = title.toLowerCase().replace(/ /g, '-'); // Generate new slug based on updated title
- 
-    // Check if the blog exists
-    const existingBlog = await Blog.findOne({ slug: req.params.slug });
- 
+    const { title, status, content, thumbnail, category, tags, excerpt, read_time, is_featured } = req.body;
+
+    // ✅ frontend slug bhejta hai identifier ke taur pe, route param ka naam :id hai
+    const existingBlog = await Blog.findOne({ slug: req.params.id });
+
     if (!existingBlog) {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
- 
-    // Check for existing title or slug in other blogs excluding the current one
-    const duplicateBlog = await Blog.findOne({
-      $or: [{ title }, { slug }],
-      _id: { $ne: existingBlog._id } // Exclude the current blog
-    });
- 
-    if (duplicateBlog) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Another blog with this title or slug already exists" 
+
+    const slug = title ? title.toLowerCase().replace(/ /g, '-') : existingBlog.slug;
+
+    if (title) {
+      const duplicateBlog = await Blog.findOne({
+        $or: [{ title }, { slug }],
+        _id: { $ne: existingBlog._id }
       });
+      if (duplicateBlog) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Another blog with this title or slug already exists" 
+        });
+      }
+      existingBlog.title = title;
+      existingBlog.slug = slug;
     }
- 
-    // Update the blog
-    existingBlog.title = title;
-    existingBlog.slug = slug; // Update to new slug
+
+    if (status !== undefined) existingBlog.status = status;
+    if (content !== undefined) existingBlog.content = content;
+    if (thumbnail !== undefined) existingBlog.thumbnail = thumbnail;
+    if (category !== undefined) existingBlog.category = category;
+    if (tags !== undefined) existingBlog.tags = tags;
+    if (excerpt !== undefined) existingBlog.excerpt = excerpt;
+    if (read_time !== undefined) existingBlog.read_time = read_time;
+    if (is_featured !== undefined) existingBlog.is_featured = is_featured;
+
     const updatedBlog = await existingBlog.save();
- 
+
     res.status(200).json({ success: true, message: "Blog updated", data: updatedBlog });
   } catch (error) {
     res.status(500).json({ message: error.message });
