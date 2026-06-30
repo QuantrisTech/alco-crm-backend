@@ -90,7 +90,7 @@ router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "s
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
 router.post(
-  "/receiving/export-email",
+  "/invoices/receiving/export-email",
   protect,
   authorize("admin", "super_admin", "finance_manager"), // adjust roles as per your access rules
   sendReceivingReportEmail
