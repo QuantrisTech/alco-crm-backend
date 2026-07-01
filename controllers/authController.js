@@ -330,9 +330,9 @@ exports.completeAccountSetup = async (req, res) => {
       password: hashedPassword,
       verificationToken,
       isVerified: false,        // email verify karwao
-      is_old_user: false,       // ab normal user ban gaya
+      isTemporaryPassword: false,
+      // is_old_user: false,       // ab normal user ban gaya
       // needsAccountSetup: false,
-      // isTemporaryPassword: false,
       avatarColor,
     });
 
