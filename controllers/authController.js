@@ -331,8 +331,8 @@ exports.completeAccountSetup = async (req, res) => {
       verificationToken,
       isVerified: false,        // email verify karwao
       is_old_user: false,       // ab normal user ban gaya
-      needsAccountSetup: false,
-      isTemporaryPassword: false,
+      // needsAccountSetup: false,
+      // isTemporaryPassword: false,
       avatarColor,
     });
 
@@ -431,6 +431,8 @@ exports.verifyEmail = async (req, res) => {
 
   user.isVerified = true;
   user.verificationToken = undefined;
+  user.is_old_user = false;        
+  user.needsAccountSetup = false;  
   await user.save();
 
   const token = generateToken(user);
