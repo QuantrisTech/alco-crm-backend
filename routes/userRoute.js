@@ -13,7 +13,7 @@ const {
 
 const router = express.Router();
 
-router.get("/", protect, authorize("admin", "super_admin", "sales_manager"), getAllUsers);
+router.get("/", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), getAllUsers);
 router.get("/profile", protect, getProfile);
 router.patch("/profile", protect, updateProfile);
 router.patch("/change-password", protect, changePassword);
