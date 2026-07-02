@@ -428,3 +428,16 @@ exports.changeUserPassword = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+exports.getAdminRecipients = async (req, res) => {
+  try {
+    const admins = await User.find({ role: { $in: ["admin", "super_admin"] } })
+      .select("name email role")
+      .lean();
+
+    res.json({ success: true, data: admins });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
