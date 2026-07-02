@@ -93,9 +93,12 @@ exports.createEnrollmentDirect = async (req, res) => {
     });
 
     if (batch) {
-      await Batch.findByIdAndUpdate(
-        batch,
-        { $addToSet: { students: user } }, // duplicate na bane isliye addToSet
+      const updatedBatch = await Batch.findOneAndUpdate(
+        { _id: batch, students: { $ne: user } }, // agar already enrolled to skip
+        {
+          $addToSet: { students: user },
+          $inc: { current_students: 1 },
+        },
         { new: true }
       );
     }
