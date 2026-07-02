@@ -478,7 +478,7 @@ exports.verifyEmail = async (req, res) => {
   }
 
   // ✅ Redirect to frontend with token — success flow
-  return res.redirect(`${process.env.CRM_FRONTEND_URL}/verify-success?token=${token}`);
+  return res.redirect(`${process.env.CRM_FRONTEND_URL}/dashboard/verify-success?token=${token}`);
 };
 
 // ─── LOGOUT ──────────────────────────────────────────────────
