@@ -1,6 +1,7 @@
 // controllers/enrollmentController.js
 const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
+const Batch = require("../models/batchModel");
 
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
@@ -32,6 +33,14 @@ exports.createEnrollment = async (req, res) => {
       paymentPlan, // Save payment plan details
       status: "Pending" // Set initial status to Pending
     });
+
+    if (batch) {
+      await Batch.findByIdAndUpdate(
+        batch,
+        { $addToSet: { students: user } }, // duplicate na bane isliye addToSet
+        { new: true }
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -82,6 +91,14 @@ exports.createEnrollmentDirect = async (req, res) => {
       // paymentPlan, // Save payment plan details
       // status: "Pending" // Set initial status to Pending
     });
+
+    if (batch) {
+      await Batch.findByIdAndUpdate(
+        batch,
+        { $addToSet: { students: user } }, // duplicate na bane isliye addToSet
+        { new: true }
+      );
+    }
 
     res.status(201).json({
       success: true,
