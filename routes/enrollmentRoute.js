@@ -25,7 +25,7 @@ router.get("/my", protect, getMyEnrollments);
 // ADMIN
 router.post("/", protect, authorize("admin", "super_admin"), createEnrollment);
 
-router.post("/direct", protect, authorize("admin", "super_admin", "sales_manager"), createEnrollmentDirect);
+router.post("/direct", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirect);
 
 router.get("/", protect, authorize("admin", "super_admin", "sales_rep", "sales_manager", "finance_manager"), getAllEnrollments);
 
