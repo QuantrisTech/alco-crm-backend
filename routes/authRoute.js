@@ -17,6 +17,7 @@ router.get("/me", protect, authController.getMe);
 router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
 router.get("/verify-email/:token", authController.verifyEmail);
+router.post("/verify-email-self", protect, authController.selfVerifyEmail);
 router.post("/resend-verification", authController.resendVerification);
 router.post("/refresh", authController.refreshToken);
 router.post("/logout", protect, authController.logout);

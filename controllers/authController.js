@@ -481,6 +481,27 @@ exports.verifyEmail = async (req, res) => {
   return res.redirect(`${process.env.CRM_FRONTEND_URL}/dashboard/verify-success?token=${token}`);
 };
 
+// ─── SELF VERIFY EMAIL (profile popup button se direct) ───────
+exports.selfVerifyEmail = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "Email already verified" });
+    }
+
+    user.isVerified = true;
+    user.is_old_user = false;
+    user.needsAccountSetup = false;
+    await user.save();
+
+    res.json({ success: true, message: "Email verified successfully ✅" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ─── LOGOUT ──────────────────────────────────────────────────
 exports.logout = async (req, res) => {
   try {
