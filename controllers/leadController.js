@@ -1331,8 +1331,19 @@ exports.convertLead = async (req, res) => {
             status: "active",
             accessStatus: "RESTRICTED",
             assigned_to: lead.assigned_to,
-            // assigned_to: lead.assigned_to,
         });
+
+        // ── Step 4.5: Batch student count update ──────────────────
+        if (lead.batch_id) {
+            await Batch.findOneAndUpdate(
+                { _id: lead.batch_id, students: { $ne: user._id } },
+                {
+                    $addToSet: { students: user._id },
+                    $inc: { current_students: 1 },
+                },
+                { new: true }
+            );
+        }
 
         // ── Step 5: Invoice Number ────────────────────────────────
         const count = await Invoice.countDocuments();
@@ -1775,7 +1786,7 @@ exports.markInterested = async (req, res) => {
                     replacements: {
                         UserName: user.name || lead.first_name,
                         ProgramName: lead.program_name || "the program",
-                        // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract/${lead._id}`,
+                        ContractLink: `        LoginLink: "https://app.arslanlarik.com/dashboard/contract`,
                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
                         SupportEmail: "alco@support.com",
                         YourCompanyName: "Al-and-co",
