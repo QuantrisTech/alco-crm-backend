@@ -492,8 +492,8 @@ exports.selfVerifyEmail = async (req, res) => {
     }
 
     user.isVerified = true;
-    user.is_old_user = false;
-    user.needsAccountSetup = false;
+    // user.is_old_user = false;
+    // user.needsAccountSetup = false;
     await user.save();
 
     res.json({ success: true, message: "Email verified successfully ✅" });
