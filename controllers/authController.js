@@ -422,31 +422,63 @@ exports.resetPassword = async (req, res) => {
 };
 
 // ─── VERIFY EMAIL ────────────────────────────────────────────
+// exports.verifyEmail = async (req, res) => {
+//   const user = await User.findOne({ verificationToken: req.params.token });
+
+//   if (!user) {
+//     return res.status(400).json({ message: "This verification link has already been used or is invalid." });
+//   }
+
+//   user.isVerified = true;
+//   user.verificationToken = undefined;
+//   user.is_old_user = false;        
+//   user.needsAccountSetup = false;  
+//   await user.save();
+
+//   const token = generateToken(user);
+
+//   if (user.email) {
+//     await sendEmail({
+//       to: user.email,
+//       subject: "Welcome 🎉",
+//       templateName: "registration",
+//       replacements: { UserName: user.name, LoginLink: process.env.CRM_FRONTEND_URL + "/auth", YourCompanyName: "Al-and-co" },
+//     });
+//   }
+
+//   res.json({ success: true, message: "Email verified successfully", token });
+// };
 exports.verifyEmail = async (req, res) => {
   const user = await User.findOne({ verificationToken: req.params.token });
 
   if (!user) {
-    return res.status(400).json({ message: "This verification link has already been used or is invalid." });
+    // ❌ JSON nahi — redirect with error flag
+    return res.redirect(`${process.env.CRM_FRONTEND_URL}/auth?verify=invalid`);
   }
 
   user.isVerified = true;
   user.verificationToken = undefined;
-  user.is_old_user = false;        
-  user.needsAccountSetup = false;  
+  user.is_old_user = false;
+  user.needsAccountSetup = false;
   await user.save();
 
   const token = generateToken(user);
 
   if (user.email) {
-    await sendEmail({
-      to: user.email,
-      subject: "Welcome 🎉",
-      templateName: "registration",
-      replacements: { UserName: user.name, LoginLink: process.env.CRM_FRONTEND_URL + "/auth", YourCompanyName: "Al-and-co" },
-    });
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Welcome 🎉",
+        templateName: "registration",
+        replacements: { UserName: user.name, LoginLink: process.env.CRM_FRONTEND_URL + "/auth", YourCompanyName: "Al-and-co" },
+      });
+    } catch (e) {
+      console.error("Welcome email fail:", e.message);
+    }
   }
 
-  res.json({ success: true, message: "Email verified successfully", token });
+  // ✅ Redirect to frontend with token — success flow
+  return res.redirect(`${process.env.CRM_FRONTEND_URL}/verify-success?token=${token}`);
 };
 
 // ─── LOGOUT ──────────────────────────────────────────────────
