@@ -19,25 +19,29 @@ module.exports = `<!DOCTYPE html>
           <!-- HEADER -->
             <tr>
             <td
-              style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:20px 20px 10px;text-align:center;">
+              style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:20px 20px 15px;text-align:left;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <div style="display: flex; align-items:flex-start; justify-content: space-between;">
-                    <div>
-                      <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
-                        style="height:55px;width:auto;display:block;" />
-                      <p style="font-size:18px; font-weight:600; color:#ffffff; text-align: left; line-height: 2px;">
-                        Update on your request
-                      </p>
-                      <p style="font-size:13px; color:#94a3b8; text-align: left;">Important information regarding your application</p>
-                    </div>
-                    <div style="margin: 5px 10px 0px 0px;">
-                    <span style="background:rgb(254, 242, 242, 0.75); color:#991b1b; padding:4px 10px;
-                      border-radius:6px; font-size:11px; font-weight:600;">
+                  <td align="left" valign="top">
+                    <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp"
+                      alt="AL&CO"
+                      width="140"
+                      style="height:55px;width:auto;max-width:140px;display:block;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:18px;font-weight:700;font-family:Arial,sans-serif;" />
+                  </td>
+                  <td align="right" valign="top" style="padding-top:5px;">
+                    <span style="background:#fef2f2; color:#991b1b; padding:4px 10px;
+                      border-radius:6px; font-size:11px; font-weight:600; display:inline-block;">
                       Request Update
                     </span>
-                    </div>
-                  </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" align="left" style="padding-top:10px;">
+                    <p style="margin:0;font-size:18px; font-weight:600; color:#ffffff; text-align: left;">
+                      Update on your request
+                    </p>
+                    <p style="margin:4px 0 0;font-size:13px; color:#94a3b8; text-align: left;">Important information regarding your application</p>
+                  </td>
                 </tr>
               </table>
 
@@ -89,7 +93,10 @@ module.exports = `<!DOCTYPE html>
           <!-- FOOTER -->
           <tr>
             <td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
-              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_80,q_100,f_auto/v1777543090/logo_gx6cud.webp" alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;margin:0 auto 8px;" />
+              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_80,q_100,f_auto/v1777543090/logo_gx6cud.webp"
+                alt="AL&CO"
+                width="120"
+                style="height:40px;width:auto;max-width:120px;display:block;margin:0 auto 8px;border:0;outline:none;text-decoration:none;color:#1a1a2e;font-size:16px;font-weight:700;font-family:Arial,sans-serif;" />
               <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">Center for Human Brilliance & Behavioral Reengineering</p>
               <p style="margin:0;font-size:12px;color:#9ca3af;">Questions? Contact us at <a href="mailto:{{SupportEmail}}" style="color:#EF9F27;text-decoration:none;">{{SupportEmail}}</a></p>
             </td>

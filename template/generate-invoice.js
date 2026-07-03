@@ -11,37 +11,42 @@ module.exports = `
 <div style="width:100%;max-width:860px;margin:0 auto;background:#ffffff;">
 
   <!-- HEADER -->
-  <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:36px 44px 30px;display:flex;align-items:flex-start;justify-content:space-between;">
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="vertical-align:top;">
-          <table cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="vertical-align:middle;">
-                <div style="width:64px;height:64px;background:rgba(200,168,75,0.15);border:2px solid #c8a84b;border-radius:10px;margin:0 auto 20px;line-height:64px;text-align:center;font-size:18px; color:#c8a84b">ALCO</div>
-                <!-- <div style="width:44px;height:44px;background:#c8a84b;border-radius:10px;text-align:center;line-height:44px;font-size:16px;font-weight:800;color:#1a3a5c;display:inline-block;">AL</div> -->
-              </td>
-              <td style="vertical-align:middle;padding-left:12px;display:flex;flex-direction:column;align-items:flex-start; gap: 4px;">
-                <!-- <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;line-height:1;">ALCO</div> -->
-              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;" />
-                <div style="font-size:11px;color:#94a3b8;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">Academy of Life Coaching</div>
-              </td>
-            </tr>
-          </table>
-          <div style="font-size:11.5px;color:#94a3b8;line-height:1.7;margin-top:14px;">
-            Karachi, Pakistan<br/>
-            info@alco.com &nbsp;|&nbsp; +92 300 0000000<br/>
-            www.alco.com
-          </div>
-        </td>
-        <td style="vertical-align:top;text-align:right;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">Invoice Number</div>
-          <div style="font-family:'Courier New',monospace;font-size:26px;font-weight:600;color:#ffffff;">{{invoiceNumber}}</div>
-          <div style="display:inline-block;margin-top:10px;padding:5px 14px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:#fff8e8;color:#b07800;">{{invoiceStatus}}</div>
-        </td>
-      </tr>
-    </table>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
+    <tr>
+      <td style="padding:36px 44px 30px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="vertical-align:top;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <div style="width:64px;height:64px;background:rgba(200,168,75,0.15);border:2px solid #c8a84b;border-radius:10px;line-height:64px;text-align:center;font-size:18px;color:#c8a84b;">ALCO</div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp"
+                      alt="AL&CO"
+                      width="150"
+                      style="height:40px;width:auto;max-width:150px;display:block;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:16px;font-weight:700;font-family:Georgia,serif;" />
+                    <div style="font-size:11px;color:#94a3b8;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;margin-top:6px;">Academy of Life Coaching</div>
+                  </td>
+                </tr>
+              </table>
+              <div style="font-size:11.5px;color:#94a3b8;line-height:1.7;margin-top:14px;">
+                Karachi, Pakistan<br/>
+                info@alco.com &nbsp;|&nbsp; +92 300 0000000<br/>
+                www.alco.com
+              </div>
+            </td>
+            <td style="vertical-align:top;text-align:right;">
+              <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">Invoice Number</div>
+              <div style="font-family:'Courier New',monospace;font-size:26px;font-weight:600;color:#ffffff;">{{invoiceNumber}}</div>
+              <div style="display:inline-block;margin-top:10px;padding:5px 14px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:#fff8e8;color:#b07800;">{{invoiceStatus}}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
   <!-- GOLD LINE -->
   <div style="height:3px;background:linear-gradient(90deg,#c8a84b,#e8c96a,#c8a84b);"></div>

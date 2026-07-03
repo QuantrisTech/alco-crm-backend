@@ -17,18 +17,34 @@ module.exports = `<!DOCTYPE html>
           <!-- Header -->
           <tr>
             <td
-              style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:30px 40px 30px;text-align:center; display: flex; flex-direction: column; align-items: center; position: relative;">
-              <div style="position: absolute; top: 15px; left: 25px; z-index: 1;">
-                <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company"
-                  style="height:35px;width:auto;display:block;" />
-              </div>
-              <div
-                style="width:54px;height:54px;background:rgba(200,168,75,0.15);border:2px solid #c8a84b;border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:40px;text-align:center;">
-                💳</div>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">Payment Plan
-                Ready</h1>
-              <p style="margin:10px 0 0;font-size:14px;color:#94a3b8;">Your payment schedule has been set up
-              </p>
+              style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:20px 25px 30px;text-align:center;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="left" style="padding-bottom:15px;">
+                    <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp"
+                      alt="AL&CO"
+                      width="120"
+                      style="height:35px;width:auto;max-width:120px;display:inline-block;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:18px;font-weight:700;font-family:'Segoe UI',Arial,sans-serif;" />
+                  </td>
+                </tr>
+              </table>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <table cellpadding="0" cellspacing="0" style="margin:0 auto 20px;">
+                      <tr>
+                        <td
+                          style="width:54px;height:54px;background:rgba(200,168,75,0.15);border:2px solid #c8a84b;border-radius:50%;text-align:center;vertical-align:middle;font-size:24px;line-height:50px;">
+                          💳</td>
+                      </tr>
+                    </table>
+                    <h1 style="margin:0;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">Payment Plan
+                      Ready</h1>
+                    <p style="margin:10px 0 0;font-size:14px;color:#94a3b8;">Your payment schedule has been set up
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
@@ -114,8 +130,10 @@ module.exports = `<!DOCTYPE html>
           <!-- Footer -->
           <tr>
             <td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
-              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_80,q_100,f_auto/v1777543090/logo_gx6cud.webp" alt="Arslan Larik & Company"
-                style="height:40px;width:auto;display:block;margin:0 auto 8px;" />
+              <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_80,q_100,f_auto/v1777543090/logo_gx6cud.webp"
+                alt="AL&CO"
+                width="120"
+                style="height:40px;width:auto;max-width:120px;display:block;margin:0 auto 8px;border:0;outline:none;text-decoration:none;color:#1a1a2e;font-size:16px;font-weight:700;font-family:'Segoe UI',Arial,sans-serif;" />
               <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">Center for Human Brilliance & Behavioral
                 Reengineering</p>
               <p style="margin:0;font-size:12px;color:#9ca3af;">Questions? Contact us at <a
