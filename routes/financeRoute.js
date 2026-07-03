@@ -48,6 +48,13 @@ router.get("/invoices/my", protect, getMyInvoices);
 router.get("/invoices/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingPayments);
 router.get("/invoices/overdue", protect, authorize("finance_manager", "admin", "super_admin"), getOverduePayments);
 router.get("/invoices/upcoming-dues", protect, authorize("finance_manager", "admin", "super_admin"), getUpcomingDues);
+router.get(
+  "/invoices/sales",
+  protect,
+  authorize("sales_manager", "sales_rep"),
+  getSalesRoleInvoices
+);
+
 router.get("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), getInvoiceById);
 router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), updateInvoice);
 router.patch("/invoices/:id/mark-paid", protect, authorize("finance_manager", "admin", "super_admin"), markInvoicePaid);
@@ -67,13 +74,6 @@ router.post(
 
 router.post("/invoices/:id/send-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendInvoiceEmail);
 router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
-router.get(
-  "/invoices/sales",
-  protect,
-  authorize("sales_manager", "sales_rep", "admin", "super_admin"),   
-  getSalesRoleInvoices
-);
-
 
 // ─── PAYMENT ROUTES ───────────────────────────────────────────
 router.post("/payments", protect, authorize("finance_manager", "admin", "super_admin"), addPayment);
