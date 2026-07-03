@@ -1786,7 +1786,7 @@ exports.markInterested = async (req, res) => {
                     replacements: {
                         UserName: user.name || lead.first_name,
                         ProgramName: lead.program_name || "the program",
-                        ContractLink: `        LoginLink: "https://app.arslanlarik.com/dashboard/contract`,
+                        ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
                         SupportEmail: "alco@support.com",
                         YourCompanyName: "Al-and-co",
