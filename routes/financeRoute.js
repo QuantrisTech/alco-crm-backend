@@ -70,7 +70,7 @@ router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "
 router.get(
   "/invoices/sales",
   protect,
-  authorize("sales_manager", "sales_rep"),
+  authorize("sales_manager", "sales_rep", "admin", "super_admin"),   
   getSalesRoleInvoices
 );
 
