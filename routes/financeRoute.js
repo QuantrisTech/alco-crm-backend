@@ -13,7 +13,7 @@ const {
   addInstallment,
   updateInvoice,
   sendInvoiceEmail,
-  sendReceivingInvoiceEmail,
+  // sendReceivingInvoiceEmail,
   getSalesRoleInvoices,
   addPayment,
   getAllPayments,
@@ -29,7 +29,8 @@ const {
   getRevenueReport,
   getMonthlyCollections,
   getPendingReport,
-  searchEnrollments, 
+  searchEnrollments,
+  exportReceivingExcel,
   sendReceivingReportEmail,
 } = require("../controllers/financeController.js");
 
@@ -48,6 +49,14 @@ router.get("/invoices/my", protect, getMyInvoices);
 router.get("/invoices/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingPayments);
 router.get("/invoices/overdue", protect, authorize("finance_manager", "admin", "super_admin"), getOverduePayments);
 router.get("/invoices/upcoming-dues", protect, authorize("finance_manager", "admin", "super_admin"), getUpcomingDues);
+router.get("/invoices/receiving/export-excel", exportReceivingExcel);
+router.post(
+  "/invoices/receiving/export-email",
+  protect,
+  authorize("admin", "super_admin", "finance_manager"),
+  sendReceivingReportEmail
+);
+
 router.get(
   "/invoices/sales",
   protect,
@@ -73,7 +82,7 @@ router.post(
 );
 
 router.post("/invoices/:id/send-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendInvoiceEmail);
-router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
+// router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
 
 // ─── PAYMENT ROUTES ───────────────────────────────────────────
 router.post("/payments", protect, authorize("finance_manager", "admin", "super_admin"), addPayment);
@@ -90,12 +99,6 @@ router.post("/extension", protect, authorize("finance_manager", "admin", "super_
 router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "super_admin"), getRevenueReport);
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
-router.post(
-  "/invoices/receiving/export-email",
-  protect,
-  authorize("admin", "super_admin", "finance_manager"), // adjust roles as per your access rules
-  sendReceivingReportEmail
-);
 
 module.exports = router;
 
