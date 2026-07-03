@@ -1333,18 +1333,6 @@ exports.convertLead = async (req, res) => {
             assigned_to: lead.assigned_to,
         });
 
-        // ── Step 4.5: Batch student count update ──────────────────
-        if (lead.batch_id) {
-            await Batch.findOneAndUpdate(
-                { _id: lead.batch_id, students: { $ne: user._id } },
-                {
-                    $addToSet: { students: user._id },
-                    $inc: { current_students: 1 },
-                },
-                { new: true }
-            );
-        }
-
         // ── Step 5: Invoice Number ────────────────────────────────
         const count = await Invoice.countDocuments();
         const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;

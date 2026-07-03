@@ -36,6 +36,7 @@ const {
 // your existing JWT middleware
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
+const { uploadReceiptFile } = require("../middlewares/uploadReceipt.js");
 
 
 router.get("/enrollments/search", protect, authorize("super_admin", "admin", "finance_manager"), searchEnrollments);
@@ -50,7 +51,7 @@ router.get("/invoices/upcoming-dues", protect, authorize("finance_manager", "adm
 router.get("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), getInvoiceById);
 router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), updateInvoice);
 router.patch("/invoices/:id/mark-paid", protect, authorize("finance_manager", "admin", "super_admin"), markInvoicePaid);
-router.patch("/invoices/:invoiceId/installments/:installmentId/mark-paid", protect, authorize("admin", "super_admin", "finance_manager"), markInstallmentPaid);
+router.patch("/invoices/:invoiceId/installments/:installmentId/mark-paid", protect, authorize("admin", "super_admin", "finance_manager"), uploadReceiptFile, markInstallmentPaid);
 // financeRoutes.js
 router.patch(
   "/invoices/:invoiceId/installments/:installmentId",

@@ -37,6 +37,9 @@ const paymentSchema = new mongoose.Schema(
 
     receivedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
+    receiptUrl: { type: String, default: null },
+    receiptPublicId: { type: String, default: null },
+
     notes: String,
   },
   { timestamps: true }

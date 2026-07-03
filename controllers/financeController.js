@@ -4,6 +4,8 @@ const Payment = require("../models/paymentModel.js");
 const Enrollment = require("../models/enrollmentModel.js");
 const Lead = require("../models/leadModel.js");
 const User = require("../models/userModel.js");
+const Batch = require("../models/batchModel");
+const { uploadToCloudinary } = require("../middlewares/uploadReceipt");
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
@@ -462,10 +464,25 @@ exports.markInstallmentPaid = async (req, res) => {
 
     const before = invoice.toObject();
 
+    // 👇 Receipt optional — sirf tab Cloudinary pe jayega jab file upload hui ho
+    let receiptUrl = null;
+    let receiptPublicId = null;
+
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: "receipts",
+        resource_type: "auto", // image ya pdf dono handle karega
+      });
+      receiptUrl = result.secure_url;
+      receiptPublicId = result.public_id;
+    }
+
     installment.status = "PAID";
     installment.paidAmount = installment.amount;
     installment.method = method;
     installment.referenceNumber = referenceNumber || null;
+    installment.receiptUrl = receiptUrl;
+    installment.receiptPublicId = receiptPublicId;
 
     const totalPaid = invoice.installments.reduce(
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
@@ -479,7 +496,6 @@ exports.markInstallmentPaid = async (req, res) => {
 
     await invoice.save({ session });
 
-    // Payment record
     const payment = new Payment({
       invoice: invoice._id,
       enrollment: invoice.enrollment,
@@ -487,6 +503,8 @@ exports.markInstallmentPaid = async (req, res) => {
       amount: installment.amount,
       method,
       referenceNumber: referenceNumber || null,
+      receiptUrl,
+      receiptPublicId,
       status: "approved",
       approvedBy: req.user._id,
       approvedAt: new Date(),
@@ -495,7 +513,6 @@ exports.markInstallmentPaid = async (req, res) => {
     });
     await payment.save({ session });
 
-    // ✅ AUTO JOURNAL — Bank/Cash debit + Receivable credit
     await postPaymentJournal({
       amount: installment.amount,
       method,
@@ -570,6 +587,14 @@ exports.markInstallmentPaid = async (req, res) => {
         await enrollment.save({ session });
         enrollmentActivated = true;
 
+        if (enrollment.batch) {
+          await Batch.findByIdAndUpdate(
+            enrollment.batch,
+            { $addToSet: { students: enrollment.user } }, // ya field name jo bhi ho
+            { session }
+          );
+        }
+
         await logAudit({
           req,
           action: "ENROLLMENT_ACTIVATED_ADVANCE_PAID",
@@ -584,12 +609,8 @@ exports.markInstallmentPaid = async (req, res) => {
 
     return res.json({
       success: true,
-      message: enrollmentActivated
-        ? `Installment paid — Enrollment activated!${leadDeleted ? " Lead record deleted." : ""}`
-        : "Installment marked as paid",
+      message: "Installment marked as paid",
       data: invoice,
-      enrollmentActivated,
-      leadDeleted,
     });
   } catch (err) {
     await session.abortTransaction();
@@ -1694,3 +1715,4 @@ exports.searchEnrollments = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+

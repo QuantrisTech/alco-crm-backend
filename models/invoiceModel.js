@@ -49,15 +49,17 @@ const invoiceSchema = new mongoose.Schema(
         type: Boolean,
         default: false
       },
-      method: { 
-        type: String, 
-        enum: ["cash", "bank", "cheque", "manual"], 
-        default: null 
-      }, 
-      referenceNumber: { 
-        type: String, 
-        default: null 
-      }
+      method: {
+        type: String,
+        enum: ["cash", "bank", "cheque", "manual"],
+        default: null
+      },
+      referenceNumber: {
+        type: String,
+        default: null
+      },
+      receiptUrl: { type: String, default: null },
+      receiptPublicId: { type: String, default: null },
     },
     ],
   },
