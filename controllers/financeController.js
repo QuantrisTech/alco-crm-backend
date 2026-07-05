@@ -769,92 +769,170 @@ exports.updateInvoice = async (req, res) => {
 };
 
 // controllers/invoiceController.js
-exports.sendReceivingReportEmail = async (req, res) => {
-  await connectDB();
-  const { invoiceIds, filters, recipientMode, recipientIds } = req.body;
+// exports.sendReceivingReportEmail = async (req, res) => {
+//   await connectDB();
+//   const { invoiceIds, filters, recipientMode, recipientIds } = req.body;
 
-  const invoiceQuery = invoiceIds?.length
-    ? { _id: { $in: invoiceIds } }
-    : buildInvoiceFilterQuery(filters);
+//   const invoiceQuery = invoiceIds?.length
+//     ? { _id: { $in: invoiceIds } }
+//     : buildInvoiceFilterQuery(filters);
 
-  const invoices = await Invoice.find(invoiceQuery)
-    .populate("user", "name email phone")
-    .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
-    .lean();
+//   const invoices = await Invoice.find(invoiceQuery)
+//     .populate("user", "name email phone")
+//     .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
+//     .lean();
 
-  if (!invoices.length)
-    return res.status(404).json({ success: false, message: "No invoices found" });
+//   if (!invoices.length)
+//     return res.status(404).json({ success: false, message: "No invoices found" });
 
-  let recipients;
-  if (recipientMode === "specific" && recipientIds?.length) {
-    recipients = await User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } })
-      .select("email name").lean();
-  } else {
-    recipients = await User.find({ role: { $in: ["admin", "super_admin"] } })
-      .select("email name").lean();
-  }
+//   let recipients;
+//   if (recipientMode === "specific" && recipientIds?.length) {
+//     recipients = await User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } })
+//       .select("email name").lean();
+//   } else {
+//     recipients = await User.find({ role: { $in: ["admin", "super_admin"] } })
+//       .select("email name").lean();
+//   }
 
-  if (!recipients.length)
-    return res.status(400).json({ success: false, message: "No recipients found" });
+//   if (!recipients.length)
+//     return res.status(400).json({ success: false, message: "No recipients found" });
 
-  // ── Signed token — filters embed karo (24hr expiry) ──────
-  const exportToken = jwt.sign(
-    { invoiceIds: invoiceIds?.length ? invoiceIds : null, filters: filters || null },
-    process.env.JWT_SECRET,
-    { expiresIn: "24h" }
-  );
+//   // ── Signed token — filters embed karo (24hr expiry) ──────
+//   const exportToken = jwt.sign(
+//     { invoiceIds: invoiceIds?.length ? invoiceIds : null, filters: filters || null },
+//     process.env.JWT_SECRET,
+//     { expiresIn: "24h" }
+//   );
 
-  const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+//   const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
 
-  // Summary numbers
-  const totalInvoiced   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
-  const totalReceived   = invoices.reduce((s, i) => s + (i.paidAmount || 0), 0);
-  const totalOutstanding = invoices.reduce((s, i) => s + (i.remainingAmount || 0), 0);
+//   // Summary numbers
+//   const totalInvoiced   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
+//   const totalReceived   = invoices.reduce((s, i) => s + (i.paidAmount || 0), 0);
+//   const totalOutstanding = invoices.reduce((s, i) => s + (i.remainingAmount || 0), 0);
 
-  const dateRange = filters?.dateFrom && filters?.dateTo
-    ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
-    : "All Time";
+//   const dateRange = filters?.dateFrom && filters?.dateTo
+//     ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
+//     : "All Time";
 
-  const invoiceRows = invoices.map((inv) => `
-    <tr style="border-bottom:1px solid #f0f2f7;">
-      <td style="padding:10px 12px;font-family:'Courier New',monospace;font-size:11px;color:#4a5060;">${inv.invoiceNumber}</td>
-      <td style="padding:10px 12px;font-size:12px;color:#0f1117;">${inv.user?.name || "—"}</td>
-      <td style="padding:10px 12px;font-size:12px;color:#4a5060;">${inv.enrollment?.program?.name || "—"}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;">Rs ${(inv.totalAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#1a8a57;">Rs ${(inv.paidAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#c94040;">Rs ${(inv.remainingAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:11px;">${inv.status}</td>
-    </tr>
-  `).join("");
+//   const invoiceRows = invoices.map((inv) => `
+//     <tr style="border-bottom:1px solid #f0f2f7;">
+//       <td style="padding:10px 12px;font-family:'Courier New',monospace;font-size:11px;color:#4a5060;">${inv.invoiceNumber}</td>
+//       <td style="padding:10px 12px;font-size:12px;color:#0f1117;">${inv.user?.name || "—"}</td>
+//       <td style="padding:10px 12px;font-size:12px;color:#4a5060;">${inv.enrollment?.program?.name || "—"}</td>
+//       <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;">Rs ${(inv.totalAmount || 0).toLocaleString()}</td>
+//       <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#1a8a57;">Rs ${(inv.paidAmount || 0).toLocaleString()}</td>
+//       <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#c94040;">Rs ${(inv.remainingAmount || 0).toLocaleString()}</td>
+//       <td style="padding:10px 12px;text-align:center;font-size:11px;">${inv.status}</td>
+//     </tr>
+//   `).join("");
 
-  res.json({ success: true, message: `Report ${recipients.length} recipient(s) ko bheji jaa rahi hai` });
+//   res.json({ success: true, message: `Report ${recipients.length} recipient(s) ko bheji jaa rahi hai` });
 
-  // ── Email background mein ─────────────────────────────────
-  Promise.allSettled(
-    recipients.map((r) =>
-      sendEmailDynamic({
-        to: r.email,
-        subject: "Receiving Report — AL&CO Finance",
-        templateName: "receiving-report-admin",
-        replacements: {
-          recipientName: r.name,
-          generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
-          dateRange,
-          invoiceCount: invoices.length,
-          invoiceRows,
-          totalInvoiced: totalInvoiced.toLocaleString(),
-          totalReceived: totalReceived.toLocaleString(),
-          totalOutstanding: totalOutstanding.toLocaleString(),
-          downloadUrl,  // ← token wala link
-        },
-      })
-    )
-  ).catch((err) => console.error("Report email error:", err));
-};
+//   // ── Email background mein ─────────────────────────────────
+//   Promise.allSettled(
+//     recipients.map((r) =>
+//       sendEmailDynamic({
+//         to: r.email,
+//         subject: "Receiving Report — AL&CO Finance",
+//         templateName: "receiving-report-admin",
+//         replacements: {
+//           recipientName: r.name,
+//           generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
+//           dateRange,
+//           invoiceCount: invoices.length,
+//           invoiceRows,
+//           totalInvoiced: totalInvoiced.toLocaleString(),
+//           totalReceived: totalReceived.toLocaleString(),
+//           totalOutstanding: totalOutstanding.toLocaleString(),
+//           downloadUrl,  // ← token wala link
+//         },
+//       })
+//     )
+//   ).catch((err) => console.error("Report email error:", err));
+// };
+// exports.sendReceivingReportEmail = async (req, res) => {
+//   try {
+//     const { invoiceIds, filters, recipientMode, recipientIds } = req.body;
+
+//     const invoiceQuery = invoiceIds?.length
+//       ? { _id: { $in: invoiceIds } }
+//       : buildInvoiceFilterQuery(filters || {});
+
+//     const [invoices, recipients] = await Promise.all([
+//       Invoice.find(invoiceQuery)
+//         .populate("user", "name email")
+//         .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
+//         .lean()
+//         .limit(500), // ← limit lagao, sab fetch na karo
+//       recipientMode === "specific" && recipientIds?.length
+//         ? User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } }).select("email name").lean()
+//         : User.find({ role: { $in: ["admin", "super_admin"] } }).select("email name").lean(),
+//     ]);
+
+//     if (!invoices.length)
+//       return res.status(404).json({ success: false, message: "No invoices found" });
+
+//     if (!recipients.length)
+//       return res.status(400).json({ success: false, message: "No recipients found" });
+
+//     // ── Token generate ────────────────────────────────────────
+//     const exportToken = jwt.sign(
+//       { invoiceIds: invoiceIds?.length ? invoiceIds : null, filters: filters || null },
+//       process.env.JWT_SECRET,
+//       { expiresIn: "24h" }
+//     );
+
+//     const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+
+//     const dateRange = filters?.dateFrom && filters?.dateTo
+//       ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
+//       : "All Time";
+
+//     // ── Turant response bhejo ─────────────────────────────────
+//     res.json({
+//       success: true,
+//       message: `Report ${recipients.length} recipient(s) ko bheji ja rahi hai`,
+//     });
+
+//     // ── Email background mein ─────────────────────────────────
+//     const totalInvoiced   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
+//     const totalReceived   = invoices.reduce((s, i) => s + (i.paidAmount || 0), 0);
+//     const totalOutstanding = invoices.reduce((s, i) => s + (i.remainingAmount || 0), 0);
+
+//     setImmediate(() => {
+//       Promise.allSettled(
+//         recipients.map((r) =>
+//           sendEmailDynamic({
+//             to: r.email,
+//             subject: "Receiving Report — AL&CO Finance",
+//             templateName: "receiving-report-admin",
+//             replacements: {
+//               recipientName: r.name,
+//               generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
+//               dateRange,
+//               invoiceCount: invoices.length,
+//               totalInvoiced: totalInvoiced.toLocaleString(),
+//               totalReceived: totalReceived.toLocaleString(),
+//               totalOutstanding: totalOutstanding.toLocaleString(),
+//               downloadUrl,
+//             },
+//           })
+//         )
+//       ).catch((err) => console.error("Report email error:", err));
+//     });
+
+//   } catch (err) {
+//     console.error("sendReceivingReportEmail error:", err);
+//     if (!res.headersSent) {
+//       res.status(500).json({ success: false, message: err.message });
+//     }
+//   }
+// };
 
 // ── Excel download endpoint ───────────────────────────────────
 exports.exportReceivingExcel = async (req, res) => {
-  await connectDB();
+  // await connectDB();
   const { token } = req.query;
 
   if (!token) return res.status(400).send("Token missing");
@@ -870,7 +948,17 @@ exports.exportReceivingExcel = async (req, res) => {
 
   const invoiceQuery = invoiceIds?.length
     ? { _id: { $in: invoiceIds } }
-    : buildInvoiceFilterQuery(filters || {});
+    : filters?.status || filters?.dateFrom
+      ? {
+          ...(filters.status ? { status: filters.status } : {}),
+          ...(filters.dateFrom || filters.dateTo ? {
+            dueDate: {
+              ...(filters.dateFrom ? { $gte: new Date(filters.dateFrom) } : {}),
+              ...(filters.dateTo ? { $lte: new Date(filters.dateTo) } : {}),
+            }
+          } : {})
+        }
+      : {};
 
   const invoices = await Invoice.find(invoiceQuery)
     .populate("user", "name email phone")
@@ -1585,244 +1673,233 @@ exports.sendInvoiceEmail = async (req, res) => {
 
 
 exports.sendReceivingReportEmail = async (req, res) => {
-  await connectDB();
-  const { invoiceIds, filters, recipientMode, recipientIds } = req.body;
+  try {
+    const { invoiceIds, filters, recipientMode, recipientIds } = req.body;
 
-  const invoiceQuery = invoiceIds?.length
-    ? { _id: { $in: invoiceIds } }
-    : buildInvoiceFilterQuery(filters);
+    const buildInvoiceQuery = (f = {}) => ({
+      ...(f.status ? { status: f.status } : {}),
+      ...(f.dateFrom || f.dateTo ? {
+        dueDate: {
+          ...(f.dateFrom ? { $gte: new Date(f.dateFrom) } : {}),
+          ...(f.dateTo ? { $lte: new Date(f.dateTo) } : {}),
+        }
+      } : {}),
+    });
 
-  const invoices = await Invoice.find(invoiceQuery)
-    .populate("user", "name email phone")
-    .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
-    .lean();
+    const invoiceQuery = invoiceIds?.length
+      ? { _id: { $in: invoiceIds } }
+      : buildInvoiceQuery(filters || {});
 
-  if (!invoices.length)
-    return res.status(404).json({ success: false, message: "No invoices found" });
+    const [invoices, recipients] = await Promise.all([
+      Invoice.find(invoiceQuery)
+        .populate("user", "name email")
+        .populate({ path: "enrollment", populate: { path: "program", select: "name" } })
+        .lean().limit(500),
+      recipientMode === "specific" && recipientIds?.length
+        ? User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } }).select("email name").lean()
+        : User.find({ role: { $in: ["admin", "super_admin"] } }).select("email name").lean(),
+    ]);
 
-  let recipients;
-  if (recipientMode === "specific" && recipientIds?.length) {
-    recipients = await User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } })
-      .select("email name").lean();
-  } else {
-    recipients = await User.find({ role: { $in: ["admin", "super_admin"] } })
-      .select("email name").lean();
+    if (!invoices.length)
+      return res.status(404).json({ success: false, message: "No invoices found" });
+    if (!recipients.length)
+      return res.status(400).json({ success: false, message: "No recipients found" });
+
+    const exportToken = jwt.sign(
+      { invoiceIds: invoiceIds?.length ? invoiceIds : null, filters: filters || null },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+    const dateRange = filters?.dateFrom && filters?.dateTo
+      ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
+      : "All Time";
+
+    res.json({ success: true, message: `Report ${recipients.length} recipient(s) ko bheji ja rahi hai` });
+
+    setImmediate(() => {
+      Promise.allSettled(
+        recipients.map((r) =>
+          sendEmailDynamic({
+            to: r.email,
+            subject: "Receiving Report — AL&CO Finance",
+            templateName: "receiving-report-admin",
+            replacements: {
+              recipientName: r.name,
+              generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
+              dateRange,
+              invoiceCount: invoices.length,
+              downloadUrl,
+            },
+          })
+        )
+      ).catch((err) => console.error("Report email error:", err));
+    });
+
+  } catch (err) {
+    console.error("sendReceivingReportEmail error:", err);
+    if (!res.headersSent)
+      res.status(500).json({ success: false, message: err.message });
   }
-
-  if (!recipients.length)
-    return res.status(400).json({ success: false, message: "No recipients found" });
-
-  // ── Signed token — filters embed karo (24hr expiry) ──────
-  const exportToken = jwt.sign(
-    { invoiceIds: invoiceIds?.length ? invoiceIds : null, filters: filters || null },
-    process.env.JWT_SECRET,
-    { expiresIn: "24h" }
-  );
-
-  const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
-
-  // Summary numbers
-  const totalInvoiced   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
-  const totalReceived   = invoices.reduce((s, i) => s + (i.paidAmount || 0), 0);
-  const totalOutstanding = invoices.reduce((s, i) => s + (i.remainingAmount || 0), 0);
-
-  const dateRange = filters?.dateFrom && filters?.dateTo
-    ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
-    : "All Time";
-
-  const invoiceRows = invoices.map((inv) => `
-    <tr style="border-bottom:1px solid #f0f2f7;">
-      <td style="padding:10px 12px;font-family:'Courier New',monospace;font-size:11px;color:#4a5060;">${inv.invoiceNumber}</td>
-      <td style="padding:10px 12px;font-size:12px;color:#0f1117;">${inv.user?.name || "—"}</td>
-      <td style="padding:10px 12px;font-size:12px;color:#4a5060;">${inv.enrollment?.program?.name || "—"}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;">Rs ${(inv.totalAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#1a8a57;">Rs ${(inv.paidAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:right;font-family:'Courier New',monospace;font-size:12px;color:#c94040;">Rs ${(inv.remainingAmount || 0).toLocaleString()}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:11px;">${inv.status}</td>
-    </tr>
-  `).join("");
-
-  res.json({ success: true, message: `Report ${recipients.length} recipient(s) ko bheji jaa rahi hai` });
-
-  // ── Email background mein ─────────────────────────────────
-  Promise.allSettled(
-    recipients.map((r) =>
-      sendEmailDynamic({
-        to: r.email,
-        subject: "Receiving Report — AL&CO Finance",
-        templateName: "receiving-report-admin",
-        replacements: {
-          recipientName: r.name,
-          generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
-          dateRange,
-          invoiceCount: invoices.length,
-          invoiceRows,
-          totalInvoiced: totalInvoiced.toLocaleString(),
-          totalReceived: totalReceived.toLocaleString(),
-          totalOutstanding: totalOutstanding.toLocaleString(),
-          downloadUrl,  // ← token wala link
-        },
-      })
-    )
-  ).catch((err) => console.error("Report email error:", err));
 };
 
 // ── Excel download endpoint ───────────────────────────────────
-exports.exportReceivingExcel = async (req, res) => {
-  await connectDB();
-  const { token } = req.query;
+// exports.exportReceivingExcel = async (req, res) => {
+//   await connectDB();
+//   const { token } = req.query;
 
-  if (!token) return res.status(400).send("Token missing");
+//   if (!token) return res.status(400).send("Token missing");
 
-  let decoded;
-  try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
-  } catch {
-    return res.status(401).send("Link expired ya invalid hai");
-  }
+//   let decoded;
+//   try {
+//     decoded = jwt.verify(token, process.env.JWT_SECRET);
+//   } catch {
+//     return res.status(401).send("Link expired ya invalid hai");
+//   }
 
-  const { invoiceIds, filters } = decoded;
+//   const { invoiceIds, filters } = decoded;
 
-  const invoiceQuery = invoiceIds?.length
-    ? { _id: { $in: invoiceIds } }
-    : buildInvoiceFilterQuery(filters || {});
+//   const invoiceQuery = invoiceIds?.length
+//     ? { _id: { $in: invoiceIds } }
+//     : buildInvoiceFilterQuery(filters || {});
 
-  const invoices = await Invoice.find(invoiceQuery)
-    .populate("user", "name email phone")
-    .populate({ path: "enrollment", populate: { path: "program batch", select: "name" } })
-    .lean();
+//   const invoices = await Invoice.find(invoiceQuery)
+//     .populate("user", "name email phone")
+//     .populate({ path: "enrollment", populate: { path: "program batch", select: "name" } })
+//     .lean();
 
-  // ── ExcelJS workbook ──────────────────────────────────────
-  const workbook = new ExcelJS.Workbook();
-  const ws = workbook.addWorksheet("Receiving Invoices");
+//   // ── ExcelJS workbook ──────────────────────────────────────
+//   const workbook = new ExcelJS.Workbook();
+//   const ws = workbook.addWorksheet("Receiving Invoices");
 
-  const navy = "1A1A2E";
-  const gold = "C8A84B";
+//   const navy = "1A1A2E";
+//   const gold = "C8A84B";
 
-  // Headers
-  const columns = [
-    { header: "Invoice #",        key: "invoice",    width: 18 },
-    { header: "Student",          key: "student",    width: 22 },
-    { header: "Email",            key: "email",      width: 32 },
-    { header: "Program",          key: "program",    width: 30 },
-    { header: "Batch",            key: "batch",      width: 20 },
-    { header: "Total (Rs)",       key: "total",      width: 16 },
-    { header: "Paid (Rs)",        key: "paid",       width: 16 },
-    { header: "Remaining (Rs)",   key: "remaining",  width: 18 },
-    { header: "Status",           key: "status",     width: 13 },
-    { header: "Description",      key: "desc",       width: 30 },
-  ];
+//   // Headers
+//   const columns = [
+//     { header: "Invoice #",        key: "invoice",    width: 18 },
+//     { header: "Student",          key: "student",    width: 22 },
+//     { header: "Email",            key: "email",      width: 32 },
+//     { header: "Program",          key: "program",    width: 30 },
+//     { header: "Batch",            key: "batch",      width: 20 },
+//     { header: "Total (Rs)",       key: "total",      width: 16 },
+//     { header: "Paid (Rs)",        key: "paid",       width: 16 },
+//     { header: "Remaining (Rs)",   key: "remaining",  width: 18 },
+//     { header: "Status",           key: "status",     width: 13 },
+//     { header: "Description",      key: "desc",       width: 30 },
+//   ];
 
-  ws.columns = columns;
+//   ws.columns = columns;
 
-  // Header row style
-  const headerRow = ws.getRow(1);
-  headerRow.eachCell((cell) => {
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + navy } };
-    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
-    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    cell.border = {
-      top: { style: "thin", color: { argb: "FFDDE2EC" } },
-      bottom: { style: "thin", color: { argb: "FFDDE2EC" } },
-      left: { style: "thin", color: { argb: "FFDDE2EC" } },
-      right: { style: "thin", color: { argb: "FFDDE2EC" } },
-    };
-  });
-  headerRow.height = 28;
+//   // Header row style
+//   const headerRow = ws.getRow(1);
+//   headerRow.eachCell((cell) => {
+//     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + navy } };
+//     cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+//     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+//     cell.border = {
+//       top: { style: "thin", color: { argb: "FFDDE2EC" } },
+//       bottom: { style: "thin", color: { argb: "FFDDE2EC" } },
+//       left: { style: "thin", color: { argb: "FFDDE2EC" } },
+//       right: { style: "thin", color: { argb: "FFDDE2EC" } },
+//     };
+//   });
+//   headerRow.height = 28;
 
-  const statusColors = {
-    PAID:     { bg: "FFE6F6EC", fg: "FF1A8A57" },
-    PARTIAL:  { bg: "FFFFF8E1", fg: "FFB07800" },
-    PENDING:  { bg: "FFE8F0F8", fg: "FF1A3A5C" },
-    OVERDUE:  { bg: "FFFCE9E9", fg: "FFC94040" },
-    BLOCKED:  { bg: "FFF0F0F0", fg: "FF555555" },
-    EXTENDED: { bg: "FFECE9FB", fg: "FF4B3FA8" },
-  };
+//   const statusColors = {
+//     PAID:     { bg: "FFE6F6EC", fg: "FF1A8A57" },
+//     PARTIAL:  { bg: "FFFFF8E1", fg: "FFB07800" },
+//     PENDING:  { bg: "FFE8F0F8", fg: "FF1A3A5C" },
+//     OVERDUE:  { bg: "FFFCE9E9", fg: "FFC94040" },
+//     BLOCKED:  { bg: "FFF0F0F0", fg: "FF555555" },
+//     EXTENDED: { bg: "FFECE9FB", fg: "FF4B3FA8" },
+//   };
 
-  const thinBorder = {
-    top: { style: "thin", color: { argb: "FFDDE2EC" } },
-    bottom: { style: "thin", color: { argb: "FFDDE2EC" } },
-    left: { style: "thin", color: { argb: "FFDDE2EC" } },
-    right: { style: "thin", color: { argb: "FFDDE2EC" } },
-  };
+//   const thinBorder = {
+//     top: { style: "thin", color: { argb: "FFDDE2EC" } },
+//     bottom: { style: "thin", color: { argb: "FFDDE2EC" } },
+//     left: { style: "thin", color: { argb: "FFDDE2EC" } },
+//     right: { style: "thin", color: { argb: "FFDDE2EC" } },
+//   };
 
-  // Data rows
-  invoices.forEach((inv, idx) => {
-    const row = ws.addRow({
-      invoice:   inv.invoiceNumber,
-      student:   inv.user?.name || "—",
-      email:     inv.user?.email || "—",
-      program:   inv.enrollment?.program?.name || "—",
-      batch:     inv.enrollment?.batch?.name || "—",
-      total:     inv.totalAmount || 0,
-      paid:      inv.paidAmount || 0,
-      remaining: inv.remainingAmount || 0,
-      status:    inv.status,
-      desc:      inv.description || "",
-    });
+//   // Data rows
+//   invoices.forEach((inv, idx) => {
+//     const row = ws.addRow({
+//       invoice:   inv.invoiceNumber,
+//       student:   inv.user?.name || "—",
+//       email:     inv.user?.email || "—",
+//       program:   inv.enrollment?.program?.name || "—",
+//       batch:     inv.enrollment?.batch?.name || "—",
+//       total:     inv.totalAmount || 0,
+//       paid:      inv.paidAmount || 0,
+//       remaining: inv.remainingAmount || 0,
+//       status:    inv.status,
+//       desc:      inv.description || "",
+//     });
 
-    const rowBg = idx % 2 === 0 ? "FFFFFFFF" : "FFFAFBFD";
+//     const rowBg = idx % 2 === 0 ? "FFFFFFFF" : "FFFAFBFD";
 
-    row.eachCell((cell, colNumber) => {
-      cell.border = thinBorder;
-      cell.font = { name: "Calibri", size: 10.5 };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+//     row.eachCell((cell, colNumber) => {
+//       cell.border = thinBorder;
+//       cell.font = { name: "Calibri", size: 10.5 };
+//       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
 
-      // Currency cols
-      if ([6, 7, 8].includes(colNumber)) {
-        cell.numFmt = '#,##0;(#,##0);"-"';
-        cell.alignment = { horizontal: "right" };
-      }
-      // Invoice # mono
-      if (colNumber === 1) {
-        cell.font = { name: "Consolas", size: 10 };
-      }
-      // Status badge
-      if (colNumber === 9) {
-        const sc = statusColors[inv.status] || { bg: "FFF4F6FB", fg: "FF555555" };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sc.bg } };
-        cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: sc.fg } };
-        cell.alignment = { horizontal: "center" };
-      }
-    });
+//       // Currency cols
+//       if ([6, 7, 8].includes(colNumber)) {
+//         cell.numFmt = '#,##0;(#,##0);"-"';
+//         cell.alignment = { horizontal: "right" };
+//       }
+//       // Invoice # mono
+//       if (colNumber === 1) {
+//         cell.font = { name: "Consolas", size: 10 };
+//       }
+//       // Status badge
+//       if (colNumber === 9) {
+//         const sc = statusColors[inv.status] || { bg: "FFF4F6FB", fg: "FF555555" };
+//         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sc.bg } };
+//         cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: sc.fg } };
+//         cell.alignment = { horizontal: "center" };
+//       }
+//     });
 
-    row.height = 20;
-  });
+//     row.height = 20;
+//   });
 
-  // Totals row
-  const dataStart = 2;
-  const dataEnd   = ws.lastRow.number;
-  const totalRow  = ws.addRow({
-    program:   "TOTAL",
-    total:     { formula: `SUM(F${dataStart}:F${dataEnd})` },
-    paid:      { formula: `SUM(G${dataStart}:G${dataEnd})` },
-    remaining: { formula: `SUM(H${dataStart}:H${dataEnd})` },
-  });
+//   // Totals row
+//   const dataStart = 2;
+//   const dataEnd   = ws.lastRow.number;
+//   const totalRow  = ws.addRow({
+//     program:   "TOTAL",
+//     total:     { formula: `SUM(F${dataStart}:F${dataEnd})` },
+//     paid:      { formula: `SUM(G${dataStart}:G${dataEnd})` },
+//     remaining: { formula: `SUM(H${dataStart}:H${dataEnd})` },
+//   });
 
-  totalRow.eachCell((cell, col) => {
-    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF" + navy } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } };
-    cell.border = { ...thinBorder, top: { style: "medium", color: { argb: "FF" + navy } } };
-    if ([6, 7, 8].includes(col)) {
-      cell.numFmt = '#,##0;(#,##0);"-"';
-      cell.alignment = { horizontal: "right" };
-    }
-    if (col === 4) cell.alignment = { horizontal: "right" };
-  });
-  totalRow.height = 22;
+//   totalRow.eachCell((cell, col) => {
+//     cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF" + navy } };
+//     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } };
+//     cell.border = { ...thinBorder, top: { style: "medium", color: { argb: "FF" + navy } } };
+//     if ([6, 7, 8].includes(col)) {
+//       cell.numFmt = '#,##0;(#,##0);"-"';
+//       cell.alignment = { horizontal: "right" };
+//     }
+//     if (col === 4) cell.alignment = { horizontal: "right" };
+//   });
+//   totalRow.height = 22;
 
-  // Freeze + autofilter
-  ws.views = [{ state: "frozen", ySplit: 1 }];
-  ws.autoFilter = { from: "A1", to: `J${dataEnd}` };
+//   // Freeze + autofilter
+//   ws.views = [{ state: "frozen", ySplit: 1 }];
+//   ws.autoFilter = { from: "A1", to: `J${dataEnd}` };
 
-  // ── Send as download ──────────────────────────────────────
-  const date = new Date().toISOString().split("T")[0];
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="receiving-report-${date}.xlsx"`);
+//   // ── Send as download ──────────────────────────────────────
+//   const date = new Date().toISOString().split("T")[0];
+//   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+//   res.setHeader("Content-Disposition", `attachment; filename="receiving-report-${date}.xlsx"`);
 
-  await workbook.xlsx.write(res);
-  res.end();
-};
+//   await workbook.xlsx.write(res);
+//   res.end();
+// };
 
 // exports.sendReceivingInvoiceEmail = async (req, res) => {
 //   try {
