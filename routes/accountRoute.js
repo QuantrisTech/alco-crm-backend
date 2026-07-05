@@ -12,6 +12,10 @@ const {
   getAccountLedger,
   getAllJournalEntries,
   createJournalEntry,
+  getAllExpenseTitles,
+  createExpenseTitle,
+  updateExpenseTitle,
+  deleteExpenseTitle,
   getAllExpenses,
   createExpense,
   approveExpense,
@@ -35,6 +39,11 @@ router.get("/dashboard", protect, financeAdmin, getAccountsDashboard);
 // ✅ Must be before /:id
 router.get("/journal",  protect, financeAdmin, getAllJournalEntries);
 router.post("/journal", protect, adminOnly, createJournalEntry);
+
+router.get("/expense-titles", protect, getAllExpenseTitles);
+router.post("/expense-titles", protect, createExpenseTitle);
+router.patch("/expense-titles/:id", protect, updateExpenseTitle);
+router.delete("/expense-titles/:id", protect, deleteExpenseTitle);
 
 // ─── EXPENSES ─────────────────────────────────────────────────
 // ✅ Must be before /:id

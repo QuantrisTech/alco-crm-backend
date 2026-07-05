@@ -1,7 +1,8 @@
 // controllers/accountController.js
 const Account = require("../models/accountModel.js");
 const JournalEntry = require("../models/journalEntryModel.js");
-const Expense = require("../models/expenseModel.js");
+const ExpenseTitle = require("../models/expenseTitleModel.js");
+const Expense = require("../models/expenseModel.js");// controllers/expenseTitleController.js
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
 const generateUniqueNumber = require("../utils/generateUniqueNumber.js");
@@ -404,6 +405,159 @@ exports.createJournalEntry = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   } finally {
     session.endSession();
+  }
+};
+
+
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/v1/accounts/expense-titles
+// ─────────────────────────────────────────────────────────────
+exports.getAllExpenseTitles = async (req, res) => {
+  try {
+    const titles = await ExpenseTitle.find({ isActive: true }).sort({ title: 1 });
+    res.json({ success: true, data: titles });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/v1/accounts/expense-titles
+// ─────────────────────────────────────────────────────────────
+exports.createExpenseTitle = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    if (!title || !title.trim())
+      return res.status(400).json({ success: false, message: "Title is required" });
+
+    const normalized = title.trim().toLowerCase();
+
+    // duplicate check (case-insensitive)
+    const exists = await ExpenseTitle.findOne({ normalizedTitle: normalized });
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: `"${title.trim()}" already exists`,
+      });
+    }
+
+    const expenseTitle = await ExpenseTitle.create({
+      title: title.trim(),
+      createdBy: req.user._id,
+    });
+
+    await logAudit({
+      req,
+      action: "EXPENSE_TITLE_CREATED",
+      module: "accounts",
+      targetId: expenseTitle._id,
+      after: expenseTitle.toObject(),
+    });
+
+    res.status(201).json({ success: true, data: expenseTitle });
+  } catch (err) {
+    // handle race-condition duplicate key errors from the unique index
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: "This title already exists" });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/v1/accounts/expense-titles/:id
+// ─────────────────────────────────────────────────────────────
+exports.updateExpenseTitle = async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || !title.trim())
+      return res.status(400).json({ success: false, message: "Title is required" });
+
+    const expenseTitle = await ExpenseTitle.findById(req.params.id);
+    if (!expenseTitle)
+      return res.status(404).json({ success: false, message: "Expense title not found" });
+
+    const normalized = title.trim().toLowerCase();
+
+    // duplicate check — ignore self
+    const exists = await ExpenseTitle.findOne({
+      normalizedTitle: normalized,
+      _id: { $ne: expenseTitle._id },
+    });
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: `"${title.trim()}" already exists`,
+      });
+    }
+
+    const before = expenseTitle.toObject();
+    expenseTitle.title = title.trim();
+    await expenseTitle.save();
+
+    await logAudit({
+      req,
+      action: "EXPENSE_TITLE_UPDATED",
+      module: "accounts",
+      targetId: expenseTitle._id,
+      before,
+      after: expenseTitle.toObject(),
+    });
+
+    res.json({ success: true, data: expenseTitle });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: "This title already exists" });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// DELETE /api/v1/accounts/expense-titles/:id
+// ─────────────────────────────────────────────────────────────
+exports.deleteExpenseTitle = async (req, res) => {
+  try {
+    const expenseTitle = await ExpenseTitle.findById(req.params.id);
+    if (!expenseTitle)
+      return res.status(404).json({ success: false, message: "Expense title not found" });
+
+    // If this title is already used on real expenses, don't hard-delete —
+    // just deactivate it so history / reporting stays intact.
+    const usedInExpense = await Expense.findOne({ title: expenseTitle.title });
+    if (usedInExpense) {
+      expenseTitle.isActive = false;
+      await expenseTitle.save();
+
+      await logAudit({
+        req,
+        action: "EXPENSE_TITLE_DEACTIVATED",
+        module: "accounts",
+        targetId: expenseTitle._id,
+        after: expenseTitle.toObject(),
+      });
+
+      return res.json({
+        success: true,
+        message: "Title is used in existing expenses — deactivated instead of deleted",
+      });
+    }
+
+    await expenseTitle.deleteOne();
+
+    await logAudit({
+      req,
+      action: "EXPENSE_TITLE_DELETED",
+      module: "accounts",
+      targetId: expenseTitle._id,
+      before: expenseTitle.toObject(),
+    });
+
+    res.json({ success: true, message: "Expense title deleted" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
