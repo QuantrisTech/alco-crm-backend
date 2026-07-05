@@ -3,6 +3,11 @@ const mongoose = require("mongoose");
 
 const expenseTitleSchema = new mongoose.Schema(
   {
+    titleNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     title: {
       type: String,
       required: true,
@@ -26,14 +31,6 @@ const expenseTitleSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-// Always keep normalizedTitle in sync with title
-expenseTitleSchema.pre("validate", function (next) {
-  if (this.title) {
-    this.normalizedTitle = this.title.trim().toLowerCase();
-  }
-  next();
-});
 
 expenseTitleSchema.index({ normalizedTitle: 1 }, { unique: true });
 

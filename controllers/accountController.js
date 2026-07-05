@@ -7,6 +7,7 @@ const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
 const generateUniqueNumber = require("../utils/generateUniqueNumber.js");
 
+
 // ─────────────────────────────────────────────────────────────
 // SEED — Default Chart of Accounts
 // ─────────────────────────────────────────────────────────────
@@ -445,6 +446,8 @@ exports.createExpenseTitle = async (req, res) => {
 
     const expenseTitle = await ExpenseTitle.create({
       title: title.trim(),
+      normalizedTitle: normalized,
+      titleNumber: generateUniqueNumber("Exp-Title"),
       createdBy: req.user._id,
     });
 
@@ -495,6 +498,7 @@ exports.updateExpenseTitle = async (req, res) => {
 
     const before = expenseTitle.toObject();
     expenseTitle.title = title.trim();
+    expenseTitle.normalizedTitle = normalized;
     await expenseTitle.save();
 
     await logAudit({
