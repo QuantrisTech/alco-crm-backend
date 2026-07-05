@@ -804,7 +804,7 @@ exports.updateInvoice = async (req, res) => {
 //     { expiresIn: "24h" }
 //   );
 
-//   const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+//   const downloadUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
 
 //   // Summary numbers
 //   const totalInvoiced   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
@@ -883,7 +883,7 @@ exports.updateInvoice = async (req, res) => {
 //       { expiresIn: "24h" }
 //     );
 
-//     const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+//     const downloadUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
 
 //     const dateRange = filters?.dateFrom && filters?.dateTo
 //       ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
@@ -1711,7 +1711,7 @@ exports.sendReceivingReportEmail = async (req, res) => {
       { expiresIn: "24h" }
     );
 
-    const downloadUrl = `${process.env.BACKEND_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+    const downloadUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
     const dateRange = filters?.dateFrom && filters?.dateTo
       ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
       : "All Time";
