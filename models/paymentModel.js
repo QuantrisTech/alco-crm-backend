@@ -24,9 +24,11 @@ const paymentSchema = new mongoose.Schema(
     // Approval workflow
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "voided"],
       default: "pending",
     },
+
+    paidAt: { type: Date, default: Date.now }, 
 
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
@@ -39,6 +41,9 @@ const paymentSchema = new mongoose.Schema(
 
     receiptUrl: { type: String, default: null },
     receiptPublicId: { type: String, default: null },
+
+    voidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, 
+    voidedAt: Date,
 
     notes: String,
   },

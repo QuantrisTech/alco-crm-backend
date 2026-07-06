@@ -32,6 +32,8 @@ const {
   searchEnrollments,
   exportReceivingExcel,
   sendReceivingReportEmail,
+  voidInstallmentPayment,
+  deleteInvoice
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
@@ -66,6 +68,18 @@ router.get(
 
 router.get("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), getInvoiceById);
 router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), updateInvoice);
+router.patch(
+  "/invoices/:invoiceId/installments/:installmentId/void",
+  protect,
+  authorize("admin", "super_admin"),   // 👈 restrictTo → authorize
+  voidInstallmentPayment
+);
+router.delete(
+  "/invoices/:id",
+  protect,
+  authorize("admin", "super_admin"),   // 👈 yahan bhi authorize
+  deleteInvoice
+);
 router.patch("/invoices/:id/mark-paid", protect, authorize("finance_manager", "admin", "super_admin"), markInvoicePaid);
 router.patch("/invoices/:invoiceId/installments/:installmentId/mark-paid", protect, authorize("admin", "super_admin", "finance_manager"), uploadReceiptFile, markInstallmentPaid);
 // financeRoutes.js

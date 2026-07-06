@@ -15,53 +15,26 @@ const invoiceSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "PENDING",
-        "PARTIAL",
-        "PAID",
-        "OVERDUE",
-        "WARNING",
-        "EXTENDED",
-        "BLOCKED",
-      ],
+      enum: ["PENDING", "PARTIAL", "PAID", "OVERDUE", "WARNING", "EXTENDED", "BLOCKED", "CANCELLED"],
       default: "PENDING",
     },
 
     dueDate: Date,
 
     installments: [{
-      label: {
-        type: String,
-        default: "Installment"
-      },
+      label: { type: String, default: "Installment" },
       amount: Number,
       dueDate: Date,
-      paidAmount: {
-        type: Number,
-        default: 0
-      },
-      status: {
-        type: String,
-        enum: ["PENDING", "PAID", "OVERDUE"],
-        default: "PENDING",
-      },
-      isAdvance: {
-        type: Boolean,
-        default: false
-      },
-      method: {
-        type: String,
-        enum: ["cash", "bank", "cheque", "manual"],
-        default: null
-      },
-      referenceNumber: {
-        type: String,
-        default: null
-      },
+      paidAmount: { type: Number, default: 0 },
+      paidAt: { type: Date, default: null }, 
+      status: { type: String, enum: ["PENDING", "PAID", "OVERDUE"], default: "PENDING" },
+      isAdvance: { type: Boolean, default: false },
+      method: { type: String, enum: ["cash", "bank", "cheque", "manual"], default: null },
+      referenceNumber: { type: String, default: null },
       receiptUrl: { type: String, default: null },
       receiptPublicId: { type: String, default: null },
-    },
-    ],
+      paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", default: null }, // 👈 ye add karo
+    }],
   },
   { timestamps: true }
 );
