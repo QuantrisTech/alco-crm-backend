@@ -52,9 +52,54 @@ const ExcelJS = require("exceljs"); // npm install exceljs
 //     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
+// exports.createInvoice = async (req, res) => {
+//   try {
+//     const { user, enrollment, totalAmount, dueDate, installments } = req.body;
+
+//     if (!user || !enrollment || !totalAmount) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "user, enrollment, totalAmount are required",
+//       });
+//     }
+
+//     const count = await Invoice.countDocuments();
+//     const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+//     const invoice = await Invoice.create({
+//       invoiceNumber,
+//       user,
+//       enrollment,
+//       totalAmount,
+//       remainingAmount: totalAmount,
+//       dueDate,
+//       installments: installments || [],
+//     });
+
+//     // ✅ AUTO JOURNAL — Receivable + Income
+//     await postInvoiceJournal({
+//       amount: totalAmount,
+//       invoiceId: invoice._id,
+//       userId: req.user._id,
+//       description: `Invoice ${invoiceNumber} created`,
+//     });
+
+//     await logAudit({
+//       req,
+//       action: "INVOICE_CREATED",
+//       module: "finance",
+//       targetId: invoice._id,
+//       after: invoice.toObject(),
+//     });
+
+//     res.status(201).json({ success: true, data: invoice });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.createInvoice = async (req, res) => {
   try {
-    const { user, enrollment, totalAmount, dueDate, installments } = req.body;
+    const { user, enrollment, totalAmount, dueDate, installments, invoiceNumber } = req.body;
 
     if (!user || !enrollment || !totalAmount) {
       return res.status(400).json({
@@ -63,11 +108,24 @@ exports.createInvoice = async (req, res) => {
       });
     }
 
-    const count = await Invoice.countDocuments();
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+    let finalInvoiceNumber = invoiceNumber; // 👈 agar frontend se old number aaya
+
+    if (!finalInvoiceNumber) {
+      const count = await Invoice.countDocuments();
+      finalInvoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+    } else {
+      // Duplicate check — old number already exist na kare
+      const exists = await Invoice.findOne({ invoiceNumber: finalInvoiceNumber });
+      if (exists) {
+        return res.status(400).json({
+          success: false,
+          message: `Invoice number ${finalInvoiceNumber} already exists`,
+        });
+      }
+    }
 
     const invoice = await Invoice.create({
-      invoiceNumber,
+      invoiceNumber: finalInvoiceNumber,
       user,
       enrollment,
       totalAmount,
@@ -76,20 +134,16 @@ exports.createInvoice = async (req, res) => {
       installments: installments || [],
     });
 
-    // ✅ AUTO JOURNAL — Receivable + Income
     await postInvoiceJournal({
       amount: totalAmount,
       invoiceId: invoice._id,
       userId: req.user._id,
-      description: `Invoice ${invoiceNumber} created`,
+      description: `Invoice ${finalInvoiceNumber} created`,
     });
 
     await logAudit({
-      req,
-      action: "INVOICE_CREATED",
-      module: "finance",
-      targetId: invoice._id,
-      after: invoice.toObject(),
+      req, action: "INVOICE_CREATED", module: "finance",
+      targetId: invoice._id, after: invoice.toObject(),
     });
 
     res.status(201).json({ success: true, data: invoice });
