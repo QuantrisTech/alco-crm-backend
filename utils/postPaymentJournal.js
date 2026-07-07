@@ -170,12 +170,12 @@ exports.postPaymentJournal = async ({
     return null;
   }
 
-  const entryDate = date || new Date();
+  const entryDate = date || new Date(); // ✅ paidAt yahan aayega
 
   const entryData = {
-    date: entryDate,
+    date: entryDate, // ✅ ab sirf ek hi 'date' key — override nahi hoga
     description: description || "Payment received",
-    date: new Date(),
+    // date: new Date(),
     lines: [
       { account: debitAccount._id, type: "debit", amount, description: `Payment received via ${method}` },
       { account: creditAccount._id, type: "credit", amount, description: "Student receivable cleared" },
@@ -191,7 +191,7 @@ exports.postPaymentJournal = async ({
     //   year: new Date().getFullYear(),
     // },
     period: {
-      month: entryDate.getMonth() + 1,     // ← period bhi entryDate se derive hoga
+      month: entryDate.getMonth() + 1, // ✅ period bhi paidAt se derive hoga
       year: entryDate.getFullYear(),
     },
   };
