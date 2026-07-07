@@ -978,6 +978,7 @@ exports.markInstallmentPaid = async (req, res) => {
       paymentId: payment._id,
       userId: req.user._id,
       description: `Installment paid — ${installment.label} (${invoice.invoiceNumber})`,
+      date: paidAtValue,
       session,
     });
 
