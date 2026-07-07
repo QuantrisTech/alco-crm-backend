@@ -6,7 +6,7 @@ module.exports = `
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Receiving Report</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:Georgia,serif;">
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial, Helvetica, sans-serif;">
 
 <div style="width:100%;max-width:600px;margin:0 auto;background:#ffffff;">
 
@@ -72,7 +72,7 @@ module.exports = `
 // <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 // <title>Receiving Report</title>
 // </head>
-// <body style="margin:0;padding:0;background:#f4f6fb;font-family:Georgia,serif;">
+// <body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial, Helvetica, sans-serif;">
 
 // <div style="width:100%;max-width:860px;margin:0 auto;background:#ffffff;">
 

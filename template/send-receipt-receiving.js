@@ -1,4 +1,5 @@
 module.exports = `
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +7,7 @@ module.exports = `
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Invoice</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:Georgia,serif;">
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial, Helvetica, sans-serif;">
 
 <div style="width:100%;max-width:860px;margin:0 auto;background:#ffffff;">
 
@@ -17,19 +18,17 @@ module.exports = `
         <td style="vertical-align:top;">
           <table cellpadding="0" cellspacing="0">
             <tr>
-              <td style="vertical-align:middle;">
-                <div style="width:64px;height:64px;background:rgba(200,168,75,0.15);border:2px solid #c8a84b;border-radius:10px;margin:0 auto 20px;line-height:64px;text-align:center;font-size:18px;color:#c8a84b">ALCO</div>
-              </td>
-              <td style="vertical-align:middle;padding-left:12px;">
-                <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp" alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;" />
-                <div style="font-size:11px;color:#94a3b8;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">Academy of Life Coaching</div>
-              </td>
-            </tr>
+                <td style="vertical-align:middle;">
+                  <img
+                    src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp"
+                    alt="Arslan Larik & Company" style="height:40px;width:auto;display:block;" />
+                </td>
+              </tr>
           </table>
           <div style="font-size:11.5px;color:#94a3b8;line-height:1.7;margin-top:14px;">
-            Karachi, Pakistan<br/>
-            info@alco.com &nbsp;|&nbsp; +92 300 0000000<br/>
-            www.alco.com &nbsp;|&nbsp; NTN: 2826497-5
+            D86/1, block 7, Gulshan-e-iqbal, karachi, Sindh PK<br/>
+            connect@arslanlarik.com &nbsp;|&nbsp; 1+8886814808<br/>
+            https://arslanlarik.com/ &nbsp;|&nbsp; NTN: 2826497-5
           </div>
         </td>
         <td style="vertical-align:top;text-align:right;">
@@ -204,93 +203,63 @@ module.exports = `
     </table>
 
     <!-- TERMS & NOTES -->
-    <div style="background:#f4f6fb;border:1px solid #dde2ec;border-radius:12px;padding:18px 22px;margin-bottom:10px;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#8a92a6;margin-bottom:10px;">Terms &amp; Notes</div>
+   <div style="background:#f4f6fb;border:1px solid #dde2ec;border-radius:12px;padding:16px 20px;margin-bottom:32px;">
+        <div
+          style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#8a92a6;margin-bottom:10px;">
+          Terms &amp; Notes
+        </div>
 
-      <!-- Payment note -->
-      <div style="font-size:13px;color:#4a5060;line-height:1.6;margin-bottom:14px;">
-        Advance payment of <strong style="color:#0f1117;">Rs {{advanceAmount}}</strong> must be received by
-        <strong style="color:#0f1117;">{{advanceDueDate}}</strong> to activate enrollment.
-        Remaining installments are due monthly as per the schedule above.
-        Late payments may result in restricted portal access.
-        For queries contact: <strong style="color:#0f1117;">finance@alco.com</strong>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#4a5060;line-height:1.8;">
+          <li>This is an auto-generated invoice and therefore requires no signature.</li>
+
+          <li>All payments remitted, including initial down payments, are deemed final and non-refundable upon receipt.
+          </li>
+
+          <li>Certificates will be awarded after successful test evaluation and full payment completion.</li>
+
+          <li>Company NTN Number: <strong style="color:#0f1117;">2826497-5</strong></li>
+
+          <li>Cheques should be crossed and made payable to <strong style="color:#0f1117;">Arslan Larik &amp;
+              Company</strong>.</li>
+
+          <li>Bank details will be provided upon request.</li>
+        </ul>
       </div>
-
-      <!-- Policy bullets -->
-      <table cellpadding="0" cellspacing="0" width="100%">
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            This is an auto-generated invoice and therefore requires no signature <em>(treat as original)</em>.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            All payments remitted, including initial down payments, are <strong style="color:#0f1117;">deemed final and non-refundable</strong> upon receipt.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            Certificates will be awarded post-test evaluation and <strong style="color:#0f1117;">payment completion</strong>.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            Cheques should be crossed and payable to <strong style="color:#0f1117;">"Arslan Larik &amp; Company"</strong>.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            Company NTN Number: <strong style="color:#0f1117;">2826497-5</strong>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:5px 0;vertical-align:top;width:22px;">
-            <span style="display:inline-block;width:18px;height:18px;background:#1a3a5c;border-radius:4px;text-align:center;line-height:18px;font-size:10px;color:#c8a84b;font-weight:700;">▶</span>
-          </td>
-          <td style="padding:5px 0 5px 8px;font-size:12px;color:#4a5060;line-height:1.5;">
-            Bank details to be provided upon request.
-          </td>
-        </tr>
-      </table>
-    </div>
 
   </div>
 
   <!-- FOOTER -->
   <div style="height:3px;background:linear-gradient(90deg,#c8a84b,#e8c96a,#c8a84b);"></div>
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;">
-    <tr>
-      <td style="padding:22px 44px;vertical-align:middle;">
-        <div style="font-size:12px;font-weight:700;color:#4a5060;margin-bottom:4px;">Payment Methods Accepted</div>
-        <div style="font-size:11px;color:#8a92a6;line-height:1.7;">
-          Cash &nbsp;|&nbsp; Bank Transfer &nbsp;|&nbsp; Cheque (crossed, payable to "Arslan Larik &amp; Company")<br/>
-          Bank details provided upon request &nbsp;|&nbsp; NTN: 2826497-5
-        </div>
-      </td>
-      <td style="padding:22px 44px;text-align:right;vertical-align:middle;">
-        <div style="font-size:13px;font-weight:800;color:#1a3a5c;letter-spacing:-0.02em;">ALCO</div>
-        <div style="font-size:11px;color:#8a92a6;margin-top:4px;line-height:1.6;">
-          Arslan Larik &amp; Company<br/>
-          System-generated — no signature required.
-        </div>
-      </td>
-    </tr>
-  </table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #dde2ec;background:#f4f6fb;">
+      <tr>
+        <td style="padding:22px 44px;vertical-align:top;">
+          <div style="font-size:12px;font-weight:700;color:#4a5060;margin-bottom:8px;">
+            Payment Methods Accepted
+          </div>
+
+          <div style="font-size:11px;color:#8a92a6;line-height:1.8;">
+            Cash &nbsp;|&nbsp; Bank Transfer &nbsp;|&nbsp; Cheque<br /><br />
+
+            <strong style="color:#0f1117;">HBL Bank</strong><br />
+            <strong>Account Title:</strong> ARSLAN LARIK &amp; Company<br />
+            <strong>Account Number:</strong> 19107901888203<br />
+            <strong>IBAN:</strong> PK94HABB0019107901888203<br />
+            <strong>Branch:</strong> Korangi Road, DHA Phase II
+          </div>
+        </td>
+
+        <td style="padding:22px 44px;text-align:right;vertical-align:top;">
+          <div style="font-size:13px;font-weight:800;color:#1a3a5c;letter-spacing:-0.02em;">
+            ALCO
+          </div>
+          <div style="font-size:11px;color:#8a92a6;margin-top:4px;">
+            This is a system-generated invoice.<br />
+            No signature required.
+          </div>
+        </td>
+      </tr>
+    </table>
+
 
 </div>
 </body>

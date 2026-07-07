@@ -7,7 +7,7 @@ module.exports = `<!DOCTYPE html>
   <title>Your Payment Plan is Ready</title>
 </head>
 
-<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:Arial, Helvetica, sans-serif;">
 
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:40px 0;">
     <tr>
@@ -24,7 +24,7 @@ module.exports = `<!DOCTYPE html>
                     <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_110,q_100,f_png/v1777543091/logo-white_xg7uyj.webp"
                       alt="AL&CO"
                       width="120"
-                      style="height:35px;width:auto;max-width:120px;display:inline-block;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:18px;font-weight:700;font-family:'Segoe UI',Arial,sans-serif;" />
+                      style="height:35px;width:auto;max-width:120px;display:inline-block;border:0;outline:none;text-decoration:none;color:#ffffff;font-size:18px;font-weight:700;font-family:Arial, Helvetica, sans-serif;" />
                   </td>
                 </tr>
               </table>
@@ -133,7 +133,7 @@ module.exports = `<!DOCTYPE html>
               <img src="https://res.cloudinary.com/dmbpjv9e8/image/upload/h_80,q_100,f_auto/v1777543090/logo_gx6cud.webp"
                 alt="AL&CO"
                 width="120"
-                style="height:40px;width:auto;max-width:120px;display:block;margin:0 auto 8px;border:0;outline:none;text-decoration:none;color:#1a1a2e;font-size:16px;font-weight:700;font-family:'Segoe UI',Arial,sans-serif;" />
+                style="height:40px;width:auto;max-width:120px;display:block;margin:0 auto 8px;border:0;outline:none;text-decoration:none;color:#1a1a2e;font-size:16px;font-weight:700;font-family:Arial, Helvetica, sans-serif;" />
               <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">Center for Human Brilliance & Behavioral
                 Reengineering</p>
               <p style="margin:0;font-size:12px;color:#9ca3af;">Questions? Contact us at <a
