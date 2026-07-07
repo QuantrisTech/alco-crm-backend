@@ -139,9 +139,9 @@ router.post("/:id/duplicate", protect, authorize("admin", "super_admin"), adminD
 
 // ── ADMIN — Batches ──
 router.get("/batches", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetBatches);
-router.post("/batches", protect, authorize("admin", "super_admin"), adminCreateBatch);
-router.put("/batches/:id", protect, authorize("admin", "super_admin"), adminUpdateBatch);
-router.delete("/batches/:id", protect, authorize("admin", "super_admin"), adminDeleteBatch);
+router.post("/batches", protect, authorize("admin", "super_admin", "finance_manager"), adminCreateBatch);
+router.put("/batches/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminUpdateBatch);
+router.delete("/batches/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminDeleteBatch);
 
 // ── ADMIN — Courses ──
 router.get("/:id/courses", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetCourses);
