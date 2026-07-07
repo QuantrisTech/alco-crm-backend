@@ -101,7 +101,7 @@ const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 
 exports.createInvoice = async (req, res) => {
   try {
-    const { user, enrollment, totalAmount, dueDate, installments, invoiceNumber } = req.body;
+    const { user, enrollment, totalAmount, dueDate, installments, invoiceNumber, issueDate } = req.body;
 
     if (!user || !enrollment || !totalAmount) {
       return res.status(400).json({
@@ -110,13 +110,12 @@ exports.createInvoice = async (req, res) => {
       });
     }
 
-    let finalInvoiceNumber = invoiceNumber; // 👈 agar frontend se old number aaya
+    let finalInvoiceNumber = invoiceNumber;
 
     if (!finalInvoiceNumber) {
       const count = await Invoice.countDocuments();
       finalInvoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
     } else {
-      // Duplicate check — old number already exist na kare
       const exists = await Invoice.findOne({ invoiceNumber: finalInvoiceNumber });
       if (exists) {
         return res.status(400).json({
@@ -133,6 +132,7 @@ exports.createInvoice = async (req, res) => {
       totalAmount,
       remainingAmount: totalAmount,
       dueDate,
+      issueDate: issueDate ? new Date(issueDate) : new Date(), // 👈 add karo
       installments: installments || [],
     });
 
@@ -993,6 +993,7 @@ exports.markInstallmentPaid = async (req, res) => {
     let enrollmentActivated = false;
     let leadDeleted = false;
 
+    // ── 4. Advance paid → activate enrollment(s) ──────────────────
     if (installment.isAdvance) {
       const hasOverdue = invoice.installments.some(
         (inst) =>
