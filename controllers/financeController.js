@@ -1615,14 +1615,64 @@ exports.addPayment = async (req, res) => {
 };
 
 // GET ALL PAYMENTS (with filters)
+// exports.getAllPayments = async (req, res) => {
+//   try {
+//     const { status, method, userId, page = 1, limit = 10 } = req.query;
+
+//     const filter = {};
+//     if (status) filter.status = status;
+//     if (method) filter.method = method;
+//     if (userId) filter.user = userId;
+
+//     const payments = await Payment.find(filter)
+//       .populate("user", "name email")
+//       .populate("invoice", "totalAmount status")
+//       .populate("enrollment")
+//       .populate("receivedBy", "name")
+//       .populate("approvedBy", "name")
+//       .sort({ createdAt: -1 })
+//       .skip((page - 1) * limit)
+//       .limit(Number(limit));
+
+//     const total = await Payment.countDocuments(filter);
+
+//     res.json({
+//       success: true,
+//       data: payments,
+//       meta: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / limit) },
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+// GET ALL PAYMENTS (with filters)
 exports.getAllPayments = async (req, res) => {
   try {
-    const { status, method, userId, page = 1, limit = 10 } = req.query;
+    const {
+      status,
+      method,
+      userId,
+      dateFrom,
+      dateTo,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
     if (method) filter.method = method;
     if (userId) filter.user = userId;
+
+    // Date filter runs on paidAt (not createdAt)
+    if (dateFrom || dateTo) {
+      filter.paidAt = {};
+      if (dateFrom) filter.paidAt.$gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        filter.paidAt.$lte = end;
+      }
+    }
 
     const payments = await Payment.find(filter)
       .populate("user", "name email")
@@ -1636,10 +1686,23 @@ exports.getAllPayments = async (req, res) => {
 
     const total = await Payment.countDocuments(filter);
 
+    // Aggregate total amount for the SAME filter (not just current page)
+    const totalAmountAgg = await Payment.aggregate([
+      { $match: filter },
+      { $group: { _id: null, totalAmount: { $sum: "$amount" } } },
+    ]);
+    const totalAmount = totalAmountAgg[0]?.totalAmount || 0;
+
     res.json({
       success: true,
       data: payments,
-      meta: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / limit) },
+      meta: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / limit),
+        totalAmount,
+      },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
