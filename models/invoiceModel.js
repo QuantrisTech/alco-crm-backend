@@ -5,6 +5,7 @@ const invoiceSchema = new mongoose.Schema(
   {
     invoiceNumber: { type: String, unique: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    isBundle: { type: Boolean, default: false },
     enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
 
     totalAmount: Number,
@@ -12,6 +13,13 @@ const invoiceSchema = new mongoose.Schema(
     remainingAmount: Number,
 
     description: { type: String, default: "" },
+
+    items: [{
+      program: { type: mongoose.Schema.Types.ObjectId, ref: "Program" },
+      programName: String,
+      enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
+      amount: Number,
+    }],
 
     status: {
       type: String,

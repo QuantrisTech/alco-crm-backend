@@ -1550,6 +1550,173 @@ exports.convertLead = async (req, res) => {
     }
 };
 
+exports.convertLeadBundle = async (req, res) => {
+    try {
+        const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
+        if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+
+        const { program_ids, batch_ids } = req.body; // ["nlpId", "masterPracId"], optional batch per program
+        if (!Array.isArray(program_ids) || program_ids.length < 2) {
+            return res.status(400).json({ success: false, message: "At least 2 programs required for bundle" });
+        }
+
+        if (!lead.paymentPlan) {
+            return res.status(400).json({ success: false, message: "Please set a payment plan before converting." });
+        }
+
+        // ── User banao/find karo (same logic jaisa convertLead mein hai) ──
+        const crypto = require("crypto");
+        const tempPassword = crypto.randomBytes(8).toString("hex");
+        let user = await User.findOne({ email: lead.email });
+        let isNewUser = false;
+
+        if (!user) {
+            isNewUser = true;
+            user = await User.create({
+                name: `${lead.first_name} ${lead.last_name}`,
+                email: lead.email,
+                phone: lead.phone,
+                cnic: lead.contractDetails?.cnic || "",
+                address: lead.contractDetails?.currentAddress || "",
+                role: "student",
+                password: tempPassword,
+            });
+        }
+
+        lead.user_id = user._id;
+        lead.status = "converted";
+        await lead.save();
+
+        // ── Duplicate enrollment check — har program k lia ──
+        for (const programId of program_ids) {
+            const exists = await Enrollment.findOne({ user: user._id, program: programId });
+            if (exists) {
+                return res.status(409).json({
+                    success: false,
+                    message: `Already enrolled in one of the bundle programs.`,
+                    data: { enrollmentId: exists._id, programId },
+                });
+            }
+        }
+
+        // ── Programs fetch (name + price snapshot k lia) ──
+        const programs = await Program.find({ _id: { $in: program_ids } }).select("name price");
+
+        // ── Har program k lia alag Enrollment banao ──
+        const enrollments = [];
+        for (let i = 0; i < program_ids.length; i++) {
+            const programId = program_ids[i];
+            const batchId = batch_ids?.[i] || null;
+
+            const enrollment = await Enrollment.create({
+                user: user._id,
+                program: programId,
+                batch: batchId,
+                status: "active",
+                accessStatus: "RESTRICTED",
+                assigned_to: lead.assigned_to,
+            });
+            enrollments.push(enrollment);
+        }
+
+        // ── EK invoice — sab programs items[] mein ──
+        const count = await Invoice.countDocuments();
+        const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+        const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
+
+        const allInstallments = [
+            {
+                label: "Advance Payment",
+                amount: advanceAmount,
+                dueDate: advanceDueDate,
+                status: "PENDING",
+                paidAmount: 0,
+                isAdvance: true,
+            },
+            ...(installments || []).map((inst) => ({
+                label: inst.label || "Installment",
+                amount: inst.amount,
+                dueDate: inst.dueDate,
+                status: "PENDING",
+                paidAmount: 0,
+                isAdvance: false,
+            })),
+        ];
+
+        const invoice = await Invoice.create({
+            invoiceNumber,
+            user: user._id,
+            enrollment: enrollments[0]._id, // backward-compat k lia first wala rakh do
+            isBundle: true,
+            enrollments: enrollments.map((e) => e._id),
+            items: programs.map((p, i) => ({
+                program: p._id,
+                programName: p.name,
+                enrollment: enrollments[i]._id,
+                amount: p.price,
+            })),
+            totalAmount,
+            remainingAmount: totalAmount,
+            paidAmount: 0,
+            dueDate: advanceDueDate,
+            installments: allInstallments,
+            notes: lead.paymentPlan.notes || "",
+            status: "PENDING",
+        });
+
+        // ── Har enrollment pe invoice link update karo ──
+        await Enrollment.updateMany(
+            { _id: { $in: enrollments.map((e) => e._id) } },
+            { invoice: invoice._id }
+        );
+
+        try {
+            await postInvoiceJournal({
+                amount: totalAmount,
+                invoiceId: invoice._id,
+                userId: req.user._id,
+                description: `Bundle Invoice ${invoiceNumber} — Lead converted`,
+            });
+        } catch (journalErr) {
+            console.error("postInvoiceJournal failed:", journalErr.message);
+        }
+
+        lead.invoiceNumber = invoiceNumber;
+        await lead.save();
+
+        // ── Emails (credentials + invoice) — same style jaisa convertLead mein hai ──
+        if (isNewUser) {
+            try {
+                await sendEmailDynamic({
+                    to: user.email,
+                    subject: "Your Login Credentials | ALCO",
+                    templateName: "send-user-credentials",
+                    replacements: { userName: user.name, userEmail: user.email, password: tempPassword },
+                });
+            } catch (e) { console.error("Credentials email failed:", e.message); }
+        }
+
+        await logAudit({
+            req,
+            action: "LEAD_CONVERTED_BUNDLE",
+            module: "leads",
+            targetId: lead._id,
+            after: { enrollments: enrollments.map((e) => e._id), invoice: invoice._id, user: user._id },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "Bundle lead converted — invoice created for all programs",
+            data: { user: { _id: user._id, email: user.email, isNewUser }, enrollments, invoice },
+        });
+
+    } catch (err) {
+        console.error("convertLeadBundle error:", err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 // LOST LEAD
 exports.setLeadToLost = async (req, res) => {
     try {

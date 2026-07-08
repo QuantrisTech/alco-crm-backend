@@ -133,6 +133,54 @@ exports.getMyEnrollments = async (req, res) => {
   }
 };
 
+// createEnrollmentDirectBundle — per-program batch support
+exports.createEnrollmentDirectBundle = async (req, res) => {
+  try {
+    // programBatches: [{ program: "id1", batch: "batchId1" }, { program: "id2", batch: "batchId2" }]
+    const { user, programBatches } = req.body;
+
+    if (!user || !Array.isArray(programBatches) || programBatches.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "User and at least 2 program-batch pairs are required for bundle",
+      });
+    }
+
+    // duplicate check
+    for (const { program } of programBatches) {
+      const exists = await Enrollment.findOne({ user, program });
+      if (exists) {
+        return res.status(409).json({
+          success: false,
+          message: `User already enrolled in one of the selected programs`,
+        });
+      }
+    }
+
+    const enrollments = [];
+    for (const { program, batch } of programBatches) {
+      const enrollment = await Enrollment.create({
+        user,
+        program,
+        batch: batch || undefined,
+        assigned_to: req.user._id,
+      });
+      enrollments.push(enrollment);
+
+      if (batch) {
+        await Batch.findOneAndUpdate(
+          { _id: batch, students: { $ne: user } },
+          { $addToSet: { students: user }, $inc: { current_students: 1 } }
+        );
+      }
+    }
+
+    res.status(201).json({ success: true, data: enrollments });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ALL ENROLLMENTS (ADMIN)
 // exports.getAllEnrollments = async (req, res) => {
 //   try {

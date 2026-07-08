@@ -5,6 +5,7 @@ const router = express.Router();
 const {
   createEnrollment,
   createEnrollmentDirect,
+  createEnrollmentDirectBundle,
   getMyEnrollments,
   getAllEnrollments,
   getEnrollmentById,
@@ -26,6 +27,8 @@ router.get("/my", protect, getMyEnrollments);
 router.post("/", protect, authorize("admin", "super_admin"), createEnrollment);
 
 router.post("/direct", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirect);
+
+router.post("/direct/bundle", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirectBundle);
 
 router.get("/", protect, authorize("admin", "super_admin", "sales_rep", "sales_manager", "finance_manager"), getAllEnrollments);
 
