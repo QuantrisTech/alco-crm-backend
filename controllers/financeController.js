@@ -141,6 +141,7 @@ exports.createInvoice = async (req, res) => {
       invoiceId: invoice._id,
       userId: req.user._id,
       description: `Invoice ${finalInvoiceNumber} created`,
+      date: issueDate ? new Date(issueDate) : new Date(),
     });
 
     await logAudit({
