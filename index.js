@@ -223,6 +223,7 @@ const notificationRoute = require("./routes/notificationRoute.js");
 const accountRoute = require("./routes/accountRoute.js");
 const reportRoute = require("./routes/reportRoute.js");
 const guideRoute = require("./routes/guideRoutes.js");
+const audioFileAccessRoute = require("./routes/audioFileAccessRoutes.js");
 
 const connectDB = require("./config/db.js");
 
@@ -353,7 +354,7 @@ app.use("/api/v1/notifications", notificationRoute);
 app.use("/api/v1/accounts", accountRoute);
 app.use("/api/v1/reports", reportRoute);
 app.use("/api/v1/guides", guideRoute);
-
+app.use("/api/v1/audio-access", audioFileAccessRoute);
 
 // ======================
 // ✅ HEALTH CHECK
