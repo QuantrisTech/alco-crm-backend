@@ -10,6 +10,7 @@ const generateColor = require("../utils/generateColor.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const AudioFileAccess = require("../models/audioFileAccessModel.js");
 const Lead = require("../models/leadModel.js");
+const Enrollment = require("../models/enrollmentModel.js");
 
 // Turnstile token verify utility
 const verifyTurnstile = async (token) => {
