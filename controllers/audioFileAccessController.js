@@ -68,9 +68,12 @@ const checkAlreadyEnrolled = async (userId, programIds) => {
 // ── Public: form submit ──────────────────────────────────────
 exports.requestAccess = async (req, res) => {
   try {
-    const { first_name, last_name, email, phone, programsRequested } = req.body;
+    const { first_name, last_name, email, phone, programsRequested, source } = req.body;
     const normalizedEmail = email?.toLowerCase().trim();
     const cleanFirstName = first_name?.trim();
+    const cleanSource = ["access-request", "resource", "other"].includes(source)
+      ? source
+      : "access-request"; // ✅ default fallback schema jasa
 
     if (!normalizedEmail || !cleanFirstName) {
       return res.status(400).json({ success: false, message: "First name and email are required" });
@@ -175,6 +178,7 @@ exports.requestAccess = async (req, res) => {
       existing.last_name = last_name?.trim() || existing.last_name;
       existing.phone = phone || existing.phone;
       existing.isAlready = true;
+      existing.source = cleanSource; // ✅ latest request ka source overwrite kr dia
 
       const grantedIds = existing.programsGranted.map((g) => g.toString());
       const hasNewUngranted = existing.programsRequested.some(
@@ -204,6 +208,7 @@ exports.requestAccess = async (req, res) => {
       email: normalizedEmail,
       phone: phone || null,
       isAlready: userIsAlready,
+      source: cleanSource, // ✅
       programsRequested: buildProgramEntries(programsRequested),
       accessStatus: "pending",
     });

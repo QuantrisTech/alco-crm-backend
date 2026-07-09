@@ -22,6 +22,11 @@ const audioFileAccessSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    source: {
+      type: String,
+      enum: ["access-request", "resource", "other"],
+      default: "access-request",
+    },
 
     // ✅ ab real Program IDs store hongi, hardcoded strings nahi
     programsRequested: [
