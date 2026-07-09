@@ -312,6 +312,8 @@ exports.enrollInProgram = async (req, res) => {
     }
 
     await record.save();
+    await record.populate("programsRequested.program", "name");
+    await record.populate("programsGranted", "name");
 
     res.status(200).json({
       success: true,
@@ -354,6 +356,8 @@ exports.rejectProgramAccess = async (req, res) => {
     entry.rejectReason = reason.trim();
 
     await record.save();
+    await record.populate("programsRequested.program", "name");
+    await record.populate("programsGranted", "name");
 
     res.status(200).json({
       success: true,
@@ -405,6 +409,9 @@ exports.addProgramToRequest = async (req, res) => {
     }
 
     await record.save();
+
+    await record.populate("programsRequested.program", "name");
+    await record.populate("programsGranted", "name");
 
     res.status(200).json({
       success: true,
