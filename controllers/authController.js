@@ -250,14 +250,27 @@ exports.register = async (req, res) => {
       try {
         const existingAudioRequest = await AudioFileAccess.findOne({ email: normalizedEmail });
         if (!existingAudioRequest) {
+          // ✅ user ke existing enrollments dhoondo — jo bhi programs mein active/completed enrolled hy
+          const enrollments = await Enrollment.find({
+            user: userId,
+            status: { $in: ["active", "completed", "graduated"] },
+          }).select("program");
+
+          const enrolledProgramEntries = enrollments.map((e) => ({
+            program: e.program,
+            isAlready: true,
+            status: "enrolled",
+            rejectReason: null,
+          }));
+
           await AudioFileAccess.create({
             first_name: firstName,
             last_name: lastName || "",
             email: normalizedEmail,
             phone: phone || null,
-            isAlready: true, // ✅ already registered user hy
+            isAlready: true, // already registered user
             source: "register",
-            programsRequested: [],
+            programsRequested: enrolledProgramEntries, // ✅ pehle se enrolled programs auto-populate
             accessStatus: "pending",
           });
         }
