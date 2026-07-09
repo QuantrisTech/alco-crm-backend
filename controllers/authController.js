@@ -8,6 +8,7 @@ const sendEmail = require("../utils/sendEmail.js");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
+const AudioFileAccess = require("../models/audioFileAccessModel");
 const Lead = require("../models/leadModel.js");
 
 // Turnstile token verify utility
@@ -134,7 +135,7 @@ exports.register = async (req, res) => {
       isActive: true,
       avatarColor: generateColor(normalizedEmail),
       isTemporaryPassword: true,
-      source: "register",          // 👈 naya field
+      source: "register",
     });
 
     // ── Lead bhi banao (source = register) ──────────────
@@ -149,12 +150,33 @@ exports.register = async (req, res) => {
       email: normalizedEmail,
       phone: phone || null,
       query: null,
-      source: "register",          // 👈 yahan se aaya
+      source: "register",
       status: "new",
       quality: "cold",
       user_id: newUser._id,
       assigned_to: assignedManager,
     });
+
+    // ✅ AudioFileAccess record bhi banao — bina program ke, sirf source track karne k liye
+    try {
+      const existingAudioRequest = await AudioFileAccess.findOne({ email: normalizedEmail });
+
+      if (!existingAudioRequest) {
+        await AudioFileAccess.create({
+          first_name: firstName,
+          last_name: lastName || "",
+          email: normalizedEmail,
+          phone: phone || null,
+          isAlready: false,
+          source: "register",
+          programsRequested: [], // ✅ koi program nahi, sirf entry k liye
+          accessStatus: "pending",
+        });
+      }
+    } catch (audioErr) {
+      // ✅ ye fail ho jaye tw registration process nahi rukna chahiye
+      console.error("AudioFileAccess entry failed:", audioErr.message);
+    }
 
     await sendEmailDynamic({
       to: normalizedEmail,

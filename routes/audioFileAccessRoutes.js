@@ -5,8 +5,9 @@ const {
   // updatePin,
   enrollInProgram,
   rejectProgramAccess,
-  requestAccess,
+  addProgramToRequest,
   getAllRequests,
+  requestAccess,
   grantAccess,
   rejectAccess,
 } = require("../controllers/audioFileAccessController.js");
@@ -18,6 +19,12 @@ const { authorize } = require("../middlewares/roleMiddleware.js");
 router.post("/request", requestAccess);
 router.post("/:id/enroll-program", protect, authorize("super_admin", "admin"), enrollInProgram);
 router.patch( "/:id/reject-program", protect, authorize("super_admin", "admin"), rejectProgramAccess);
+router.post(
+  "/:id/add-program",
+  protect,
+  authorize("super_admin", "admin"),
+  addProgramToRequest
+);
 
 // router.put("/pin", protect, authorize("super_admin", "admin"), updatePin);
 router.get("/", protect, authorize("super_admin", "admin"), getAllRequests);

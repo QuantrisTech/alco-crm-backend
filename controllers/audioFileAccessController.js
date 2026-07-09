@@ -1,6 +1,7 @@
 const AudioFileAccess = require("../models/audioFileAccessModel");
 // const PinConfig = require("../models/pinConfigModel");
 const Enrollment = require("../models/enrollmentModel");
+const Program = require("../models/programModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const sendEmailDynamic = require("../utils/sendEmailDynamic");
@@ -357,6 +358,57 @@ exports.rejectProgramAccess = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Program request rejected",
+      data: record,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ── Admin: kisi ek request mein naya program add krna (already requested programs ke sath) ──
+exports.addProgramToRequest = async (req, res) => {
+  try {
+    const { id } = req.params; // AudioFileAccess record id
+    const { programId } = req.body;
+
+    if (!programId) {
+      return res.status(400).json({ success: false, message: "Program is required" });
+    }
+
+    const record = await AudioFileAccess.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    // ✅ already added hy tw dobara add na karo
+    const alreadyExists = record.programsRequested.some(
+      (p) => p.program.toString() === programId.toString()
+    );
+    if (alreadyExists) {
+      return res.status(400).json({ success: false, message: "Program already added to this request" });
+    }
+
+    // ✅ enrollment check — user pehle se enrolled tw nahi is program mein
+    const user = await User.findOne({ email: record.email });
+    const enrolledSet = await checkAlreadyEnrolled(user?._id, [programId]);
+    const already = enrolledSet.has(programId.toString());
+
+    record.programsRequested.push({
+      program: programId,
+      isAlready: already,
+      status: already ? "enrolled" : "pending",
+      rejectReason: null,
+    });
+
+    if (record.accessStatus === "rejected") {
+      record.accessStatus = "pending"; // naya program aya hy tw dobara review mein le aao
+    }
+
+    await record.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Program added to request",
       data: record,
     });
   } catch (error) {
