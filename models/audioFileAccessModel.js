@@ -24,7 +24,7 @@ const audioFileAccessSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["access-request", "resource", "other"],
+      enum: ["access-request", "resource", "register", "other"],
       default: "access-request",
     },
 
