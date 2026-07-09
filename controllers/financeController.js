@@ -240,6 +240,19 @@ exports.getAllInvoices = async (req, res) => {
       filter.user = { $in: userIds };
     }
 
+    // const invoices = await Invoice.find(filter)
+    //   .populate("user", "name email phone")
+    //   .populate({
+    //     path: "enrollment",
+    //     populate: [
+    //       { path: "program", select: "name short_description" },
+    //       { path: "batch", select: "name start_date end_date" },
+    //     ],
+    //   })
+    //   .sort({ createdAt: -1 })
+    //   .skip((page - 1) * limit)
+    //   .limit(Number(limit));
+    
     const invoices = await Invoice.find(filter)
       .populate("user", "name email phone")
       .populate({
@@ -247,6 +260,19 @@ exports.getAllInvoices = async (req, res) => {
         populate: [
           { path: "program", select: "name short_description" },
           { path: "batch", select: "name start_date end_date" },
+        ],
+      })
+      .populate({
+        path: "items.enrollment",
+        populate: [
+          {
+            path: "program",
+            select: "name short_description",
+          },
+          {
+            path: "batch",
+            select: "name start_date end_date",
+          },
         ],
       })
       .sort({ createdAt: -1 })
