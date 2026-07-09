@@ -298,7 +298,7 @@ exports.enrollInProgram = async (req, res) => {
       program: programId,
       batch: batchId,
       status: "active",
-      accessStatus: "RESTRICTED", // apki policy k mutabiq — payment k baghair restricted rahega
+      accessStatus: "ACTIVE", 
     });
 
     // ✅ us program ka isAlready true karo AudioFileAccess record mein

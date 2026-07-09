@@ -101,47 +101,64 @@ const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 
 exports.createInvoice = async (req, res) => {
   try {
-    const { user, enrollment, totalAmount, dueDate, installments, invoiceNumber, issueDate } = req.body;
+    const {
+      user, enrollment, enrollments, items, // 👈 enrollments + items naye
+      totalAmount, dueDate, installments, invoiceNumber, issueDate,
+    } = req.body;
 
-    if (!user || !enrollment || !totalAmount) {
-      return res.status(400).json({
-        success: false,
-        message: "user, enrollment, totalAmount are required",
-      });
+    const isBundle = Array.isArray(enrollments) && enrollments.length > 1;
+
+    if (!user || !totalAmount) {
+      return res.status(400).json({ success: false, message: "user, totalAmount are required" });
+    }
+    if (!isBundle && !enrollment) {
+      return res.status(400).json({ success: false, message: "enrollment is required" });
+    }
+    if (isBundle && (!items || !items.length)) {
+      return res.status(400).json({ success: false, message: "items required for bundle invoice" });
     }
 
     let finalInvoiceNumber = invoiceNumber;
-
     if (!finalInvoiceNumber) {
       const count = await Invoice.countDocuments();
       finalInvoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
     } else {
       const exists = await Invoice.findOne({ invoiceNumber: finalInvoiceNumber });
       if (exists) {
-        return res.status(400).json({
-          success: false,
-          message: `Invoice number ${finalInvoiceNumber} already exists`,
-        });
+        return res.status(400).json({ success: false, message: `Invoice number ${finalInvoiceNumber} already exists` });
       }
     }
+
+    const invoiceDate = issueDate ? new Date(issueDate) : new Date();
 
     const invoice = await Invoice.create({
       invoiceNumber: finalInvoiceNumber,
       user,
-      enrollment,
+      enrollment: isBundle ? enrollments[0] : enrollment, // backward-compat, first wala
+      isBundle,
+      enrollments: isBundle ? enrollments : undefined,
+      items: isBundle ? items : undefined,
       totalAmount,
       remainingAmount: totalAmount,
       dueDate,
-      issueDate: issueDate ? new Date(issueDate) : new Date(), // 👈 add karo
+      issueDate: invoiceDate,
       installments: installments || [],
     });
+
+    // ── Bundle mein har enrollment pe invoice link karo ──
+    if (isBundle) {
+      await Enrollment.updateMany(
+        { _id: { $in: enrollments } },
+        { invoice: invoice._id }
+      );
+    }
 
     await postInvoiceJournal({
       amount: totalAmount,
       invoiceId: invoice._id,
       userId: req.user._id,
-      description: `Invoice ${finalInvoiceNumber} created`,
-      date: issueDate ? new Date(issueDate) : new Date(),
+      description: `Invoice ${finalInvoiceNumber} created${isBundle ? " (bundle)" : ""}`,
+      date: invoiceDate,
     });
 
     await logAudit({

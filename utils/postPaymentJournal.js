@@ -214,7 +214,7 @@ exports.postPaymentJournal = async ({
 };
 
 exports.postInvoiceJournal = async ({
-  amount, invoiceId, userId, description, session,
+  amount, invoiceId, userId, description, session, date
 }) => {
   const receivableAccount = await Account.findOne({ code: "1100", isActive: true });
   const incomeAccount = await Account.findOne({ code: "4001", isActive: true });
@@ -224,9 +224,12 @@ exports.postInvoiceJournal = async ({
     return null;
   }
 
+  const entryDate = date || new Date();
+
   const entryData = {
     description: description || "Invoice created",
-    date: new Date(),
+     date: entryDate, 
+    // date: new Date(),
     lines: [
       { account: receivableAccount._id, type: "debit", amount, description: "Student fee receivable" },
       { account: incomeAccount._id, type: "credit", amount, description: "Tuition fee income recognized" },
@@ -238,9 +241,13 @@ exports.postInvoiceJournal = async ({
     createdBy: userId,
     entryNumber: generateUniqueNumber("JE"),
     period: {
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
+      month: entryDate.getMonth() + 1,
+      year: entryDate.getFullYear(),
     },
+    // period: {
+    //   month: new Date().getMonth() + 1,
+    //   year: new Date().getFullYear(),
+    // },
   };
 
   const opts = session ? { session } : {};
