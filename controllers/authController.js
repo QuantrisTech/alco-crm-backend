@@ -8,7 +8,7 @@ const sendEmail = require("../utils/sendEmail.js");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
-const AudioFileAccess = require("../models/audioFileAccessModel");
+const AudioFileAccess = require("../models/audioFileAccessModel.js");
 const Lead = require("../models/leadModel.js");
 
 // Turnstile token verify utility
@@ -78,6 +78,117 @@ const verifyTurnstile = async (token) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+// exports.register = async (req, res) => {
+//   try {
+//     const isHuman = await verifyTurnstile(req.body.turnstileToken);
+//     if (!isHuman) {
+//       return res.status(400).json({ message: "Security check failed. Please try again." });
+//     }
+
+//     const { name, email, phone, role } = req.body;
+//     const normalizedEmail = email?.toLowerCase().trim();
+//     const cleanName = name?.trim();
+
+//     // ── Validation ──────────────────────────────────────
+//     if (!normalizedEmail || !cleanName) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Name and email are required",
+//       });
+//     }
+
+//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//     if (!emailRegex.test(normalizedEmail)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Please provide a valid email address",
+//       });
+//     }
+
+//     if (phone && !/^[0-9+\-\s()]{7,20}$/.test(phone)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Please provide a valid phone number",
+//       });
+//     }
+
+//     // ── Duplicate user check ────────────────────────────
+//     const existingUser = await User.findOne({ email: normalizedEmail });
+//     if (existingUser) {
+//       return res.status(200).json({
+//         success: true,
+//         duplicate: true,
+//         message: "You're already registered. Check your email for login details. 😊",
+//       });
+//     }
+
+//     const plainPassword = Math.random().toString(36).slice(-8);
+//     const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+//     const newUser = await User.create({
+//       name: cleanName,
+//       email: normalizedEmail,
+//       phone: phone || null,
+//       password: hashedPassword,
+//       role: role || "user",
+//       isVerified: true,
+//       isActive: true,
+//       avatarColor: generateColor(normalizedEmail),
+//       isTemporaryPassword: true,
+//       source: "register",          // 👈 naya field
+//     });
+
+//     // ── Lead bhi banao (source = register) ──────────────
+//     const assignedManager = await assignLeadManager();
+
+//     const [firstName, ...rest] = cleanName.split(" ");
+//     const lastName = rest.join(" ");
+
+//     const lead = await Lead.create({
+//       first_name: firstName,
+//       last_name: lastName || "",
+//       email: normalizedEmail,
+//       phone: phone || null,
+//       query: null,
+//       source: "register",          // 👈 yahan se aaya
+//       status: "new",
+//       quality: "cold",
+//       user_id: newUser._id,
+//       assigned_to: assignedManager,
+//     });
+
+//     await sendEmailDynamic({
+//       to: normalizedEmail,
+//       subject: "Your Account Credentials 🔑",
+//       templateName: "send-user-credentials",
+//       replacements: {
+//         UserName: cleanName,
+//         UserEmail: normalizedEmail,
+//         UserPassword: plainPassword,
+//         SupportEmail: "alco@support.com",
+//         YourCompanyName: "Al-and-co",
+//         LoginLink: `https://app.arslanlarik.com/auth?email=${normalizedEmail}&password=${plainPassword}`,
+//       },
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       duplicate: false,
+//       message: "Registration successful. Check your email for login details. 😊",
+//       data: { id: newUser._id, name: newUser.name, email: newUser.email, lead_id: lead._id },
+//     });
+
+//   } catch (error) {
+//     if (error.code === 11000) {
+//       return res.status(200).json({
+//         success: true,
+//         duplicate: true,
+//         message: "You're already registered. Check your email for login details. 😊",
+//       });
+//     }
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 exports.register = async (req, res) => {
   try {
     const isHuman = await verifyTurnstile(req.body.turnstileToken);
@@ -112,9 +223,55 @@ exports.register = async (req, res) => {
       });
     }
 
+    const [firstName, ...rest] = cleanName.split(" ");
+    const lastName = rest.join(" ");
+
+    // ── Helper: existing user ke liye bhi Lead + AudioFileAccess ensure karo ──
+    const ensureLeadAndAudioAccess = async (userId) => {
+      // Lead — agr already exist krta hy tw dobara na banao
+      const existingLead = await Lead.findOne({ email: normalizedEmail, source: "register" });
+      if (!existingLead) {
+        const assignedManager = await assignLeadManager();
+        await Lead.create({
+          first_name: firstName,
+          last_name: lastName || "",
+          email: normalizedEmail,
+          phone: phone || null,
+          query: null,
+          source: "register",
+          status: "new",
+          quality: "cold",
+          user_id: userId,
+          assigned_to: assignedManager,
+        });
+      }
+
+      // AudioFileAccess — agr already exist krta hy tw dobara na banao
+      try {
+        const existingAudioRequest = await AudioFileAccess.findOne({ email: normalizedEmail });
+        if (!existingAudioRequest) {
+          await AudioFileAccess.create({
+            first_name: firstName,
+            last_name: lastName || "",
+            email: normalizedEmail,
+            phone: phone || null,
+            isAlready: true, // ✅ already registered user hy
+            source: "register",
+            programsRequested: [],
+            accessStatus: "pending",
+          });
+        }
+      } catch (audioErr) {
+        console.error("AudioFileAccess entry failed:", audioErr.message);
+      }
+    };
+
     // ── Duplicate user check ────────────────────────────
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
+      // ✅ ab existing user ke liye bhi Lead + AudioFileAccess ensure karo
+      await ensureLeadAndAudioAccess(existingUser._id);
+
       return res.status(200).json({
         success: true,
         duplicate: true,
@@ -138,45 +295,10 @@ exports.register = async (req, res) => {
       source: "register",
     });
 
-    // ── Lead bhi banao (source = register) ──────────────
-    const assignedManager = await assignLeadManager();
+    // ✅ Lead + AudioFileAccess dono naye user ke liye bhi isi helper se
+    await ensureLeadAndAudioAccess(newUser._id);
 
-    const [firstName, ...rest] = cleanName.split(" ");
-    const lastName = rest.join(" ");
-
-    const lead = await Lead.create({
-      first_name: firstName,
-      last_name: lastName || "",
-      email: normalizedEmail,
-      phone: phone || null,
-      query: null,
-      source: "register",
-      status: "new",
-      quality: "cold",
-      user_id: newUser._id,
-      assigned_to: assignedManager,
-    });
-
-    // ✅ AudioFileAccess record bhi banao — bina program ke, sirf source track karne k liye
-    try {
-      const existingAudioRequest = await AudioFileAccess.findOne({ email: normalizedEmail });
-
-      if (!existingAudioRequest) {
-        await AudioFileAccess.create({
-          first_name: firstName,
-          last_name: lastName || "",
-          email: normalizedEmail,
-          phone: phone || null,
-          isAlready: false,
-          source: "register",
-          programsRequested: [], // ✅ koi program nahi, sirf entry k liye
-          accessStatus: "pending",
-        });
-      }
-    } catch (audioErr) {
-      // ✅ ye fail ho jaye tw registration process nahi rukna chahiye
-      console.error("AudioFileAccess entry failed:", audioErr.message);
-    }
+    const lead = await Lead.findOne({ email: normalizedEmail, source: "register" });
 
     await sendEmailDynamic({
       to: normalizedEmail,
@@ -196,7 +318,7 @@ exports.register = async (req, res) => {
       success: true,
       duplicate: false,
       message: "Registration successful. Check your email for login details. 😊",
-      data: { id: newUser._id, name: newUser.name, email: newUser.email, lead_id: lead._id },
+      data: { id: newUser._id, name: newUser.name, email: newUser.email, lead_id: lead?._id },
     });
 
   } catch (error) {
