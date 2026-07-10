@@ -49,9 +49,18 @@ const Lead = require("../models/leadModel");
 async function promoteVisitor(req, res) {
   try {
     const { id } = req.params;
-    const { promoted_by, promotion_reason } = req.body;
+    const {
+      promoted_by,
+      promotion_reason,
+      email,
+      first_name,
+      last_name,
+      phone,
+      program_interest,
+    } = req.body;
 
     const visitor = await Visitor.findOne({ visitor_id: id });
+
     if (!visitor) {
       return res.status(404).json({ error: "Visitor not found" });
     }
@@ -64,6 +73,14 @@ async function promoteVisitor(req, res) {
       });
     }
 
+    // If the admin provided any missing info at the moment of conversion,
+    // fill it in on the visitor record now, so nothing typed gets lost.
+    if (email) visitor.email = email;
+    if (first_name) visitor.first_name = first_name;
+    if (last_name) visitor.last_name = last_name;
+    if (phone) visitor.phone = phone;
+    if (program_interest) visitor.program_interest = program_interest;
+    
     const lead = await Lead.create({
       first_name: visitor.first_name || "Unknown",
       last_name: visitor.last_name || "",
@@ -95,3 +112,16 @@ async function promoteVisitor(req, res) {
 }
 
 module.exports = { upsertVisitor, promoteVisitor };
+
+// GET /api/v1/visitors
+async function getAllVisitors(req, res) {
+  try {
+    const visitors = await Visitor.find().sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, data: visitors });
+  } catch (err) {
+    console.error("getAllVisitors error:", err);
+    return res.status(500).json({ error: "Failed to fetch visitors" });
+  }
+}
+
+module.exports = { upsertVisitor, promoteVisitor, getAllVisitors };
