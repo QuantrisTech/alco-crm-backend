@@ -34,7 +34,7 @@ router.get("/", protect, authorize("admin", "super_admin", "sales_rep", "sales_m
 
 router.get("/:id", protect, getEnrollmentById);
 
-router.put("/:id", protect, authorize("admin", "super_admin"), updateEnrollment);
+router.put("/:id", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), updateEnrollment);
 
 router.delete("/:id", protect, authorize("admin", "super_admin"), deleteEnrollment);
 
