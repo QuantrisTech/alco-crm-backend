@@ -85,6 +85,49 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+// ✅ GET ALL Assign Roles
+exports.getAllAssignRole = async (req, res) => {
+  try {
+    const { search = "" } = req.query;
+
+    const query = {
+      role: {
+        $in: [
+          "super_admin",
+          "admin",
+          "sales_manager",
+          "sales_rep",
+        ],
+      },
+    };
+
+    if (search) {
+      const regex = new RegExp(search, "i");
+
+      query.$or = [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+      ];
+    }
+
+    const users = await User.find(query)
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // ✅ GET USER BY ID
 exports.getUserById = async (req, res) => {
   try {

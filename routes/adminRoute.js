@@ -3,7 +3,7 @@ const express = require("express");
 
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
-const { getAllUsers, getUserById, updateUser, changeUserPassword, deleteUserById, deleteAllUsers, createUser, assignRole, getAdminRecipients } = require("../controllers/adminController.js");
+const { getAllUsers, getAllAssignRole, getUserById, updateUser, changeUserPassword, deleteUserById, deleteAllUsers, createUser, assignRole, getAdminRecipients } = require("../controllers/adminController.js");
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ const router = express.Router();
 // 🔒 Only Admin Can Access All Routes
 
 router.get("/users", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), getAllUsers);
+router.get("/assign-role-users", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), getAllAssignRole);
 router.get("/users/recipients", protect, authorize("admin", "super_admin"), getAdminRecipients);
 router.get("/users/:id", protect, authorize("admin", "super_admin"), getUserById);
 router.patch("/users/:id", protect, authorize("admin", "super_admin"), updateUser);
