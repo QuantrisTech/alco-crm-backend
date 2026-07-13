@@ -17,18 +17,18 @@ const { authorize } = require("../middlewares/roleMiddleware.js");
 // ⚠️ route order: exact paths before /:id
 // router.post("/verify-pin", verifyPin);
 router.post("/request", requestAccess);
-router.post("/:id/enroll-program", protect, authorize("super_admin", "admin"), enrollInProgram);
-router.patch( "/:id/reject-program", protect, authorize("super_admin", "admin"), rejectProgramAccess);
+router.post("/:id/enroll-program", protect, authorize("super_admin", "admin", "sales_manager"), enrollInProgram);
+router.patch( "/:id/reject-program", protect, authorize("super_admin", "admin", "sales_manager"), rejectProgramAccess);
 router.post(
   "/:id/add-program",
   protect,
-  authorize("super_admin", "admin"),
+  authorize("super_admin", "admin", "sales_manager"),
   addProgramToRequest
 );
 
-// router.put("/pin", protect, authorize("super_admin", "admin"), updatePin);
-router.get("/", protect, authorize("super_admin", "admin"), getAllRequests);
-router.patch("/:id/grant", protect, authorize("super_admin", "admin"), grantAccess);
-router.patch("/:id/reject", protect, authorize("super_admin", "admin"), rejectAccess);
+// router.put("/pin", protect, authorize("super_admin", "admin", "sales_manager"), updatePin);
+router.get("/", protect, authorize("super_admin", "admin", "sales_manager"), getAllRequests);
+router.patch("/:id/grant", protect, authorize("super_admin", "admin", "sales_manager"), grantAccess);
+router.patch("/:id/reject", protect, authorize("super_admin", "admin", "sales_manager"), rejectAccess);
 
 module.exports = router;
