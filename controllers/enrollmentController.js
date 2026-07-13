@@ -2,6 +2,7 @@
 const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
 const Batch = require("../models/batchModel");
+const Payment = require("../models/paymentModel.js");
 
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
@@ -291,6 +292,7 @@ exports.getAllEnrollments = async (req, res) => {
       .populate("program")
       .populate("batch")
       .populate("assigned_to", "name email role")
+      .populate("invoice", "isBundle invoiceNumber")
       .sort({ createdAt: -1 });
 
     // Step 3: Search filter — user name, email, phone pe
@@ -375,6 +377,112 @@ exports.getAllEnrollments = async (req, res) => {
 //   }
 // };
 // SINGLE
+// exports.getEnrollmentById = async (req, res) => {
+//   try {
+//     const enrollment = await Enrollment.findById(req.params.id)
+//       .populate("user", "name email phone role")
+//       .populate("program")
+//       .populate("batch")
+//       .populate("assigned_to", "name email role");
+
+//     if (!enrollment) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Enrollment not found",
+//       });
+//     }
+
+//     const Invoice = require("../models/invoiceModel.js");
+//     const Payment = require("../models/paymentModel.js");
+
+//     const invoices = await Invoice.find({ enrollment: enrollment._id }).sort({
+//       createdAt: -1,
+//     });
+
+//     const payments = await Payment.find({
+//       invoice: { $in: invoices.map((inv) => inv._id) },
+//     }).sort({ createdAt: -1 });
+
+//     // ─── Build unified timeline ───────────────────────────────
+//     const timeline = [];
+
+//     // 1) Lead activities (call, email, meeting, note)
+//     const leadActivities = enrollment.leadSnapshot?.activities || [];
+//     leadActivities.forEach((a) => {
+//       timeline.push({
+//         type: a.activity_type, // call | email | meeting | note
+//         title: a.title,
+//         description: a.description,
+//         meta: {
+//           call_duration_minutes: a.call_duration_minutes,
+//           call_outcome: a.call_outcome,
+//           email_subject: a.email_subject,
+//           meeting_link: a.meeting_link,
+//           meeting_location: a.meeting_location,
+//         },
+//         date: a.createdAt,
+//       });
+//     });
+
+//     // 2) Contract signed
+//     if (enrollment.leadSnapshot?.contractDetails?.signedAt) {
+//       timeline.push({
+//         type: "contract",
+//         title: "Contract Signed",
+//         description: `${enrollment.leadSnapshot.contractDetails.fullName} signed the contract`,
+//         date: enrollment.leadSnapshot.contractDetails.signedAt,
+//       });
+//     }
+
+//     // 3) Enrollment created
+//     timeline.push({
+//       type: "enrollment",
+//       title: "Enrollment Created",
+//       description: `Enrolled in ${enrollment.program?.name || "program"}`,
+//       date: enrollment.enrolledAt || enrollment.createdAt,
+//     });
+
+//     // 4) Invoices
+//     invoices.forEach((inv) => {
+//       timeline.push({
+//         type: "invoice",
+//         title: `Invoice ${inv.invoiceNumber} Created`,
+//         description: `Total: ${inv.totalAmount} | Status: ${inv.status}`,
+//         date: inv.createdAt,
+//       });
+//     });
+
+//     // 5) Payments
+//     payments.forEach((p) => {
+//       timeline.push({
+//         type: "payment",
+//         title: `Payment ${p.status === "approved" ? "Received" : p.status}`,
+//         description: p.notes || `Amount: ${p.amount} via ${p.method}`,
+//         meta: {
+//           amount: p.amount,
+//           method: p.method,
+//           status: p.status,
+//         },
+//         date: p.approvedAt || p.createdAt,
+//       });
+//     });
+
+//     // Sort newest → oldest
+//     timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+//     res.json({
+//       success: true,
+//       data: {
+//         ...enrollment.toObject(),
+//         invoices,
+//         payments,
+//         timeline,
+//       },
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.getEnrollmentById = async (req, res) => {
   try {
     const enrollment = await Enrollment.findById(req.params.id)
@@ -390,17 +498,34 @@ exports.getEnrollmentById = async (req, res) => {
       });
     }
 
-    const Invoice = require("../models/invoiceModel.js");
-    const Payment = require("../models/paymentModel.js");
-
-    const invoices = await Invoice.find({ enrollment: enrollment._id }).sort({
-      createdAt: -1,
-    });
+    const invoices = await Invoice.find({
+      $or: [
+        { _id: enrollment.invoice },
+        { enrollment: enrollment._id },
+        { enrollments: enrollment._id },
+      ],
+    }).sort({ createdAt: -1 });
 
     const payments = await Payment.find({
       invoice: { $in: invoices.map((inv) => inv._id) },
     }).sort({ createdAt: -1 });
 
+    let bundleSiblings = [];
+    const bundleInvoice = invoices.find((inv) => inv.isBundle);
+
+    if (bundleInvoice) {
+      const siblingEnrollmentIds = (
+        bundleInvoice.enrollments?.length
+          ? bundleInvoice.enrollments               // naye invoices ke liye (agar enrollments[] properly save hua ho)
+          : bundleInvoice.items?.map((i) => i.enrollment).filter(Boolean)  // 👈 fallback — purane/legacy invoices ke liye
+      ).filter((id) => String(id) !== String(enrollment._id));
+
+      if (siblingEnrollmentIds.length) {
+        bundleSiblings = await Enrollment.find({ _id: { $in: siblingEnrollmentIds } })
+          .populate("program", "name level category")
+          .populate("batch", "name start_date end_date");
+      }
+    }
     // ─── Build unified timeline ───────────────────────────────
     const timeline = [];
 
@@ -475,6 +600,8 @@ exports.getEnrollmentById = async (req, res) => {
         invoices,
         payments,
         timeline,
+        isBundle: !!bundleInvoice,   // 👈 naya
+        bundleSiblings,               // 👈 naya — baaki programs ki list
       },
     });
   } catch (err) {
@@ -485,11 +612,23 @@ exports.getEnrollmentById = async (req, res) => {
 // UPDATE (SAFE)
 exports.updateEnrollment = async (req, res) => {
   try {
+    const { program_id, batch_id, ...rest } = req.body;
+
+    const updatePayload = { ...rest };
+    if (program_id !== undefined) updatePayload.program = program_id || null;
+    if (batch_id !== undefined) updatePayload.batch = batch_id || null;
+
+    console.log("updateEnrollment payload:", updatePayload); // 👈 debug — terminal mein check karo
+
     const enrollment = await Enrollment.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updatePayload },
       { new: true, runValidators: true }
-    );
+    )
+      .populate("program")     // 👈 add karo
+      .populate("batch")       // 👈 add karo
+      .populate("user", "name email phone role")
+      .populate("assigned_to", "name email");
 
     if (!enrollment) {
       return res.status(404).json({
@@ -500,6 +639,7 @@ exports.updateEnrollment = async (req, res) => {
 
     res.json({ success: true, data: enrollment });
   } catch (err) {
+    console.error("updateEnrollment error:", err); // 👈 debug
     res.status(500).json({ success: false, message: err.message });
   }
 };
