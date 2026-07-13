@@ -111,7 +111,35 @@ async function promoteVisitor(req, res) {
   }
 }
 
-module.exports = { upsertVisitor, promoteVisitor };
+
+async function updateVisitor(req, res) {
+  try {
+    const { id } = req.params;
+    const { first_name, last_name, email, phone, program_interest } = req.body;
+
+    const updateFields = {};
+    if (first_name !== undefined) updateFields.first_name = first_name;
+    if (last_name !== undefined) updateFields.last_name = last_name;
+    if (email !== undefined) updateFields.email = email;
+    if (phone !== undefined) updateFields.phone = phone;
+    if (program_interest !== undefined) updateFields.program_interest = program_interest;
+
+    const visitor = await Visitor.findOneAndUpdate(
+      { visitor_id: id },
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!visitor) {
+      return res.status(404).json({ error: "Visitor not found" });
+    }
+
+    return res.status(200).json({ success: true, data: visitor });
+  } catch (err) {
+    console.error("updateVisitor error:", err);
+    return res.status(500).json({ error: "Failed to update visitor" });
+  }
+}
 
 // GET /api/v1/visitors
 async function getAllVisitors(req, res) {
@@ -124,4 +152,4 @@ async function getAllVisitors(req, res) {
   }
 }
 
-module.exports = { upsertVisitor, promoteVisitor, getAllVisitors };
+module.exports = { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor };
