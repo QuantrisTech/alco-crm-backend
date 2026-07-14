@@ -3,7 +3,8 @@ const { authorize } = require("../middlewares/roleMiddleware");
 const express = require("express");
 const router = express.Router();
 const verifyChatbotKey = require("../middlewares/verifyChatbotKey");
-const { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor } = require("../controllers/visitorController");
+const { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor, checkExistingStudent } = require("../controllers/visitorController");
+
 
 router.post("/", verifyChatbotKey, upsertVisitor);
 
@@ -12,6 +13,9 @@ router.post("/:id/promote", protect, authorize("super_admin", "admin"), promoteV
 router.get("/", protect, authorize("super_admin", "admin"), getAllVisitors);
 
 router.patch("/:id", protect, authorize("super_admin", "admin"), updateVisitor);
+
+router.get("/check-existing", verifyChatbotKey, checkExistingStudent);
+
 
 module.exports = router;
 

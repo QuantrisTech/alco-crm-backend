@@ -5,21 +5,26 @@ const Visitor = require("../models/visitorModel");
 async function upsertVisitor(req, res) {
   try {
     const {
-      visitor_id,
-      first_name,
-      last_name,
-      phone,
-      email,
-      program_interest,
-      conversation_summary,
-      source,
-    } = req.body;
+  visitor_id,
+  first_name,
+  last_name,
+  phone,
+  email,
+  program_interest,
+  conversation_summary,
+  source,
+  is_existing_student,
+  existing_source,
+} = req.body;
 
     if (!visitor_id) {
       return res.status(400).json({ error: "visitor_id is required" });
     }
 
+    
     const updateFields = {};
+    if (is_existing_student !== undefined) updateFields.is_existing_student = is_existing_student;
+    if (existing_source !== undefined) updateFields.existing_source = existing_source;
     if (first_name !== undefined) updateFields.first_name = first_name;
     if (last_name !== undefined) updateFields.last_name = last_name;
     if (phone !== undefined) updateFields.phone = phone;
@@ -152,4 +157,35 @@ async function getAllVisitors(req, res) {
   }
 }
 
-module.exports = { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor };
+// visitorController.js
+
+const User = require("../models/userModel");
+
+
+async function checkExistingStudent(req, res) {
+  try {
+    const { email, phone } = req.query;
+    if (!email && !phone) return res.status(400).json({ error: "email or phone required" });
+
+    const query = [];
+    if (email) query.push({ email });
+    if (phone) query.push({ phone });
+
+    const [crmUser, lead] = await Promise.all([
+      User.findOne({ $or: query }),
+      Lead.findOne({ $or: query }),
+    ]);
+
+    if (crmUser) {
+      return res.status(200).json({ exists: true, source: "crm_user", user_id: crmUser._id, role: crmUser.role || null });
+    }
+    if (lead) {
+      return res.status(200).json({ exists: true, source: "lead", lead_id: lead._id, status: lead.status || null });
+    }
+    return res.status(200).json({ exists: false });
+  } catch (err) {
+    return res.status(500).json({ error: "Lookup failed" });
+  }
+}
+
+module.exports = { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor, checkExistingStudent };
