@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.get("/users", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), getAllUsers);
 router.get("/assign-role-users", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), getAllAssignRole);
-router.get("/users/recipients", protect, authorize("admin", "super_admin"), getAdminRecipients);
+router.get("/users/recipients", protect, authorize("admin", "super_admin", "finance_manager"), getAdminRecipients);
 router.get("/users/:id", protect, authorize("admin", "super_admin"), getUserById);
 router.patch("/users/:id", protect, authorize("admin", "super_admin"), updateUser);
 router.patch("/users/:id/change-password", protect, authorize("admin", "super_admin"), changeUserPassword);

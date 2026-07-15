@@ -120,6 +120,8 @@ const leadSchema = new mongoose.Schema(
     ],
 
     paymentPlan: {
+      invoiceNumber: { type: String, unique: true }, // new
+      issueDate: { type: Date, default: Date.now }, // new
       totalAmount: Number,
       discount: { type: Number, default: 0 },
       advanceAmount: Number,

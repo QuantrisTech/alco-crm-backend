@@ -789,6 +789,7 @@ exports.getLeads = async (req, res) => {
             search,
             assigned_to,
             quality,
+            hasPaymentPlan, 
         } = req.query;
 
         const query = {};
@@ -797,6 +798,10 @@ exports.getLeads = async (req, res) => {
         if (source) query.source = source;
         if (assigned_to) query.assigned_to = assigned_to;
         if (quality) query.quality = quality;
+
+        if (hasPaymentPlan === "true") {
+            query["paymentPlan.totalAmount"] = { $exists: true, $gt: 0 };
+        }
 
         // if (search) {
         //     query.$or = [
@@ -1334,8 +1339,31 @@ exports.convertLead = async (req, res) => {
         });
 
         // ── Step 5: Invoice Number ────────────────────────────────
-        const count = await Invoice.countDocuments();
-        const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // const count = await Invoice.countDocuments();
+        // const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+        // // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // let invoiceNumber = lead.paymentPlan.invoiceNumber;
+        // if (!invoiceNumber) {
+        //     const count = await Invoice.countDocuments();
+        //     invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // }
+        // ── Step 5: Invoice Number ────────────────────────────────
+        const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+
+        let invoiceNumber = lead.paymentPlan.invoiceNumber;
+        if (invoiceNumber) {
+            // 👇 NAYA — duplicate check
+            const exists = await Invoice.findOne({ invoiceNumber });
+            if (exists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invoice number ${invoiceNumber} already exists`,
+                });
+            }
+        } else {
+            const count = await Invoice.countDocuments();
+            invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        }
 
         // ── Step 6: Invoice banao ─────────────────────────────────
         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
@@ -1367,6 +1395,7 @@ exports.convertLead = async (req, res) => {
             remainingAmount: totalAmount,
             paidAmount: 0,
             dueDate: advanceDueDate,
+            issueDate: paymentPlanIssueDate,
             installments: allInstallments,
             notes: lead.paymentPlan.notes || "",
             status: "PENDING",
@@ -1379,6 +1408,7 @@ exports.convertLead = async (req, res) => {
                 invoiceId: invoice._id,
                 userId: req.user._id,
                 description: `Invoice ${invoiceNumber} — Lead converted`,
+                date: paymentPlanIssueDate,
             });
         } catch (journalErr) {
             console.error("postInvoiceJournal failed:", journalErr.message);
@@ -1564,6 +1594,16 @@ exports.convertLeadBundle = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please set a payment plan before converting." });
         }
 
+        if (lead.paymentPlan.invoiceNumber) {
+            const exists = await Invoice.findOne({ invoiceNumber: lead.paymentPlan.invoiceNumber });
+            if (exists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invoice number ${lead.paymentPlan.invoiceNumber} already exists`,
+                });
+            }
+        }
+
         // ── User banao/find karo (same logic jaisa convertLead mein hai) ──
         const crypto = require("crypto");
         const tempPassword = crypto.randomBytes(8).toString("hex");
@@ -1620,8 +1660,30 @@ exports.convertLeadBundle = async (req, res) => {
         }
 
         // ── EK invoice — sab programs items[] mein ──
-        const count = await Invoice.countDocuments();
-        const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // const count = await Invoice.countDocuments();
+        // const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+        // // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // let invoiceNumber = lead.paymentPlan.invoiceNumber;
+        // if (!invoiceNumber) {
+        //     const count = await Invoice.countDocuments();
+        //     invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // }
+        const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+
+        let invoiceNumber = lead.paymentPlan.invoiceNumber;
+        if (invoiceNumber) {
+            // 👇 NAYA — duplicate check
+            const exists = await Invoice.findOne({ invoiceNumber });
+            if (exists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invoice number ${invoiceNumber} already exists`,
+                });
+            }
+        } else {
+            const count = await Invoice.countDocuments();
+            invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        }
 
         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
 
@@ -1660,6 +1722,7 @@ exports.convertLeadBundle = async (req, res) => {
             remainingAmount: totalAmount,
             paidAmount: 0,
             dueDate: advanceDueDate,
+            issueDate: paymentPlanIssueDate,
             installments: allInstallments,
             notes: lead.paymentPlan.notes || "",
             status: "PENDING",
@@ -1677,6 +1740,7 @@ exports.convertLeadBundle = async (req, res) => {
                 invoiceId: invoice._id,
                 userId: req.user._id,
                 description: `Bundle Invoice ${invoiceNumber} — Lead converted`,
+                date: paymentPlanIssueDate,
             });
         } catch (journalErr) {
             console.error("postInvoiceJournal failed:", journalErr.message);
@@ -1911,8 +1975,11 @@ exports.markInterested = async (req, res) => {
 
         // Payment plan agar bheja hai to save karo
         if (req.body.paymentPlan) {
+            const { invoiceNumber, issueDate, ...rest } = req.body.paymentPlan;
             lead.paymentPlan = {
-                ...req.body.paymentPlan,
+                ...rest,
+                invoiceNumber: invoiceNumber || undefined,
+                issueDate: issueDate ? new Date(issueDate) : new Date(),
                 createdBy: req.user._id,
                 createdAt: new Date(),
             };
@@ -2216,8 +2283,15 @@ exports.updatePaymentPlan = async (req, res) => {
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
+
+        // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+        const { invoiceNumber, issueDate, ...rest } = req.body;
+
         lead.paymentPlan = {
-            ...req.body,
+            ...rest,
+            invoiceNumber: invoiceNumber || lead.paymentPlan?.invoiceNumber || undefined, // 👈 add
+            issueDate: issueDate ? new Date(issueDate) : (lead.paymentPlan?.issueDate || new Date()), // 👈 add
             createdBy: req.user._id,
             createdAt: new Date(),
         };

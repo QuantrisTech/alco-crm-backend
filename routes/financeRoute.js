@@ -9,6 +9,7 @@ const {
   getInvoiceById,
   markInvoicePaid,
   markInstallmentPaid,
+  editPaidInstallment,
   updateInstallment,
   addInstallment,
   updateInvoice,
@@ -21,6 +22,9 @@ const {
   approvePayment,
   rejectPayment,
   updatePayment,
+  sendPaymentsReportEmail,
+  exportPaymentsExcel,
+  exportPaymentsPdf,
   getMyInvoices,
   getPendingPayments,
   getOverduePayments,
@@ -82,7 +86,12 @@ router.delete(
 );
 router.patch("/invoices/:id/mark-paid", protect, authorize("finance_manager", "admin", "super_admin"), markInvoicePaid);
 router.patch("/invoices/:invoiceId/installments/:installmentId/mark-paid", protect, authorize("admin", "super_admin", "finance_manager"), uploadReceiptFile, markInstallmentPaid);
-// financeRoutes.js
+router.patch(
+  "/invoices/:invoiceId/installments/:installmentId/correct",
+  protect,
+  authorize("admin", "super_admin", "finance_manager"),
+  editPaidInstallment
+);
 router.patch(
   "/invoices/:invoiceId/installments/:installmentId",
   protect, authorize("admin", "super_admin", "finance_manager"),
@@ -105,6 +114,18 @@ router.get("/payments/:id", protect, authorize("finance_manager", "admin", "supe
 router.patch("/payments/:id", protect, authorize("finance_manager", "admin", "super_admin"), updatePayment);
 router.patch("/payments/:id/approve", protect, authorize("finance_manager", "admin", "super_admin"), approvePayment);
 router.patch("/payments/:id/reject", protect, authorize("finance_manager", "admin", "super_admin"), rejectPayment);
+
+// Trigger email to admins (requires login — only admins should be able to send)
+router.post(
+  "/payments/report/export-email",
+  protect,          // apka existing auth middleware
+  authorize("admin", "super_admin", "finance_manager"), // agar role-check middleware hai
+  sendPaymentsReportEmail
+);
+
+// Public-ish download links, protected by the signed token in the query string
+router.get("/payments/report/export-excel", exportPaymentsExcel);
+router.get("/payments/report/export-pdf", exportPaymentsPdf);
 
 // ─── FINANCE EXTENSION ────────────────────────────────────────
 router.post("/extension", protect, authorize("finance_manager", "admin", "super_admin"), addFinanceExtension);

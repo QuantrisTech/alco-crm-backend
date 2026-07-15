@@ -11,7 +11,8 @@ const mongoose = require("mongoose");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const { postPaymentJournal, postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 const jwt = require("jsonwebtoken");
-const ExcelJS = require("exceljs"); // npm install exceljs
+const ExcelJS = require("exceljs");
+const PDFDocument = require("pdfkit");
 const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 
 // ─────────────────────────────────────────────
@@ -252,7 +253,7 @@ exports.getAllInvoices = async (req, res) => {
     //   .sort({ createdAt: -1 })
     //   .skip((page - 1) * limit)
     //   .limit(Number(limit));
-    
+
     const invoices = await Invoice.find(filter)
       .populate("user", "name email phone")
       .populate({
@@ -1120,6 +1121,125 @@ exports.markInstallmentPaid = async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     console.error("markInstallmentPaid error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+// ── EDIT A PAID INSTALLMENT (amount/date correction after payment) ──
+exports.editPaidInstallment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { invoiceId, installmentId } = req.params;
+    const { amount, paidDate, method, referenceNumber, notes, reason } = req.body;
+
+    if (!reason) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Reason for correction is required" });
+    }
+
+    const invoice = await Invoice.findById(invoiceId).session(session);
+    if (!invoice)
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+
+    const installment = invoice.installments.id(installmentId);
+    if (!installment)
+      return res.status(404).json({ success: false, message: "Installment not found" });
+
+    if (installment.status !== "PAID")
+      return res.status(400).json({ success: false, message: "Only paid installments can be corrected" });
+
+    const payment = await Payment.findById(installment.paymentId).session(session);
+    if (!payment || payment.status !== "approved")
+      return res.status(404).json({ success: false, message: "Matching payment record not found" });
+
+    const before = invoice.toObject();
+    const beforePayment = payment.toObject();
+    const oldAmount = installment.amount;
+
+    // ── Step 1: PURANI entry (50,000 wali) ko reverse karo — YE MISSING THA ──
+    const reversed = await reverseJournalEntry({
+      sourceType: "payment",
+      sourceRef: payment._id,
+      userId: req.user._id,
+      description: `Reversal — correcting ${installment.label} (${invoice.invoiceNumber}): ${reason}`,
+      session,
+    });
+
+    if (!reversed.length) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "No posted journal entry found for this payment — cannot correct safely",
+      });
+    }
+
+    // ── Step 2: Naye correct values determine karo ──
+    const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+    const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
+    const newMethod = method || installment.method;
+    const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
+
+    // ── Step 3: Payment + installment record update karo ──
+    payment.amount = newAmount;
+    payment.method = newMethod;
+    payment.referenceNumber = newRef;
+    payment.paidAt = newPaidDate;
+    payment.notes = `${payment.notes || ""} [CORRECTED from Rs ${oldAmount} to Rs ${newAmount}: ${reason}]`;
+    await payment.save({ session });
+
+    installment.amount = newAmount;
+    installment.paidAmount = newAmount;
+    installment.method = newMethod;
+    installment.referenceNumber = newRef;
+    installment.paidAt = newPaidDate;
+
+    // ── Step 4: Invoice totals recalculate karo ──
+    const totalPaid = invoice.installments.reduce(
+      (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
+    );
+    invoice.paidAmount = totalPaid;
+    invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+    invoice.status =
+      invoice.remainingAmount === 0 ? "PAID"
+        : totalPaid > 0 ? "PARTIAL"
+          : "PENDING";
+
+    await invoice.save({ session });
+
+    // ── Step 5: NAYI (sahi) entry post karo — full new amount pe ──
+    await postPaymentJournal({
+      amount: newAmount,
+      method: newMethod,
+      paymentId: payment._id,
+      userId: req.user._id,
+      description: `Corrected payment — ${installment.label} (${invoice.invoiceNumber}): ${reason}`,
+      date: newPaidDate,
+      session,
+    });
+
+    await logAudit({
+      req,
+      action: "PAYMENT_CORRECTED",
+      module: "finance",
+      targetId: invoice._id,
+      before: { invoice: before, payment: beforePayment },
+      after: { invoice: invoice.toObject(), payment: payment.toObject(), oldAmount, newAmount, reason },
+    });
+
+    await session.commitTransaction();
+
+    return res.json({
+      success: true,
+      message: `Payment corrected — Rs ${oldAmount} reversed, Rs ${newAmount} reposted with accurate date`,
+      data: invoice,
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("editPaidInstallment error:", err);
     return res.status(500).json({ success: false, message: err.message });
   } finally {
     session.endSession();
@@ -2044,15 +2164,25 @@ exports.getMonthlyCollections = async (req, res) => {
       {
         $match: {
           status: "approved",
-          createdAt: {
+        },
+      },
+      {
+        // ✅ paidAt use karo, agar missing ho to createdAt fallback
+        $addFields: {
+          effectiveDate: { $ifNull: ["$paidAt", "$createdAt"] },
+        },
+      },
+      {
+        $match: {
+          effectiveDate: {
             $gte: new Date(`${year}-01-01`),
-            $lte: new Date(`${year}-12-31`),
+            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
           },
         },
       },
       {
         $group: {
-          _id: { month: { $month: "$createdAt" } },
+          _id: { month: { $month: "$effectiveDate" } }, // 👈 paidAt/effectiveDate se group
           totalCollected: { $sum: "$amount" },
           paymentCount: { $sum: 1 },
         },
@@ -2060,7 +2190,6 @@ exports.getMonthlyCollections = async (req, res) => {
       { $sort: { "_id.month": 1 } },
     ]);
 
-    // Fill in missing months with 0
     const result = Array.from({ length: 12 }, (_, i) => {
       const found = monthly.find((m) => m._id.month === i + 1);
       return {
@@ -2295,7 +2424,9 @@ exports.sendReceivingReportEmail = async (req, res) => {
       { expiresIn: "24h" }
     );
 
-    const downloadUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+    // const downloadUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+    const excelUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-excel?token=${exportToken}`;
+    const pdfUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/invoices/receiving/export-pdf?token=${exportToken}`;
     const dateRange = filters?.dateFrom && filters?.dateTo
       ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
       : "All Time";
@@ -2314,7 +2445,8 @@ exports.sendReceivingReportEmail = async (req, res) => {
               generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
               dateRange,
               invoiceCount: invoices.length,
-              downloadUrl,
+              excelUrl,
+              pdfUrl
             },
           })
         )
@@ -2326,6 +2458,308 @@ exports.sendReceivingReportEmail = async (req, res) => {
     if (!res.headersSent)
       res.status(500).json({ success: false, message: err.message });
   }
+};
+
+// ── Shared: build a Payment mongo filter from query/body filters ──
+function buildPaymentFilterQuery(f = {}) {
+  const filter = {};
+  if (f.status) filter.status = f.status;
+  if (f.method) filter.method = f.method;
+  if (f.userId) filter.user = f.userId;
+
+  if (f.dateFrom || f.dateTo) {
+    filter.paidAt = {};
+    if (f.dateFrom) filter.paidAt.$gte = new Date(f.dateFrom);
+    if (f.dateTo) {
+      const end = new Date(f.dateTo);
+      end.setHours(23, 59, 59, 999);
+      filter.paidAt.$lte = end;
+    }
+  }
+  return filter;
+}
+
+// ── 1. TRIGGER EMAIL — sends admins a report with Excel + PDF links ──
+exports.sendPaymentsReportEmail = async (req, res) => {
+  try {
+    const { paymentIds, filters, recipientMode, recipientIds } = req.body;
+
+    const paymentQuery = paymentIds?.length
+      ? { _id: { $in: paymentIds } }
+      : buildPaymentFilterQuery(filters || {});
+
+    const [payments, recipients] = await Promise.all([
+      Payment.find(paymentQuery)
+        .populate("user", "name email")
+        .populate("receivedBy", "name")
+        .lean()
+        .limit(500),
+      recipientMode === "specific" && recipientIds?.length
+        ? User.find({ _id: { $in: recipientIds }, role: { $in: ["admin", "super_admin"] } }).select("email name").lean()
+        : User.find({ role: { $in: ["admin", "super_admin"] } }).select("email name").lean(),
+    ]);
+
+    if (!payments.length)
+      return res.status(404).json({ success: false, message: "No payments found" });
+    if (!recipients.length)
+      return res.status(400).json({ success: false, message: "No recipients found" });
+
+    // ── Signed token — 24hr expiry, embeds the same filter set ──
+    const exportToken = jwt.sign(
+      { paymentIds: paymentIds?.length ? paymentIds : null, filters: filters || null },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    const excelUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/payments/report/export-excel?token=${exportToken}`;
+    const pdfUrl = `${process.env.BACKEND_BASE_URL}/api/v1/finance/payments/report/export-pdf?token=${exportToken}`;
+
+    const dateRange = filters?.dateFrom && filters?.dateTo
+      ? `${new Date(filters.dateFrom).toLocaleDateString("en-PK")} – ${new Date(filters.dateTo).toLocaleDateString("en-PK")}`
+      : "All Time";
+
+    const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0);
+
+    // ── Respond immediately, email goes out in background ──
+    res.json({ success: true, message: `Report ${recipients.length} recipient(s) ko bheji ja rahi hai` });
+
+    setImmediate(() => {
+      Promise.allSettled(
+        recipients.map((r) =>
+          sendEmailDynamic({
+            to: r.email,
+            subject: "Payments Report — AL&CO Finance",
+            templateName: "payments-report-admin", // 👈 naya template banana hoga
+            replacements: {
+              recipientName: r.name,
+              generatedDate: new Date().toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }),
+              dateRange,
+              paymentCount: payments.length,
+              totalAmount: totalAmount.toLocaleString(),
+              excelUrl,
+              pdfUrl,
+            },
+          })
+        )
+      ).catch((err) => console.error("Payments report email error:", err));
+    });
+  } catch (err) {
+    console.error("sendPaymentsReportEmail error:", err);
+    if (!res.headersSent) res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── 2. EXCEL DOWNLOAD (token-based, no auth middleware) ──
+exports.exportPaymentsExcel = async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).send("Token missing");
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).send("Link expired ya invalid hai");
+  }
+
+  const { paymentIds, filters } = decoded;
+  const paymentQuery = paymentIds?.length
+    ? { _id: { $in: paymentIds } }
+    : buildPaymentFilterQuery(filters || {});
+
+  const payments = await Payment.find(paymentQuery)
+    .populate("user", "name email")
+    .populate("receivedBy", "name")
+    .populate("approvedBy", "name")
+    .lean();
+
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Payments");
+
+  const navy = "1A1A2E";
+
+  ws.columns = [
+    { header: "Student", key: "student", width: 22 },
+    { header: "Email", key: "email", width: 32 },
+    { header: "Amount (Rs)", key: "amount", width: 16 },
+    { header: "Method", key: "method", width: 14 },
+    { header: "Reference #", key: "ref", width: 20 },
+    { header: "Status", key: "status", width: 13 },
+    { header: "Received By", key: "receivedBy", width: 20 },
+    { header: "Paid At", key: "paidAt", width: 16 },
+  ];
+
+  const headerRow = ws.getRow(1);
+  headerRow.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + navy } };
+    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+  headerRow.height = 28;
+
+  const statusColors = {
+    approved: { bg: "FFE6F6EC", fg: "FF1A8A57" },
+    pending: { bg: "FFFFF8E1", fg: "FFB07800" },
+    rejected: { bg: "FFFCE9E9", fg: "FFC94040" },
+  };
+  const thinBorder = {
+    top: { style: "thin", color: { argb: "FFDDE2EC" } },
+    bottom: { style: "thin", color: { argb: "FFDDE2EC" } },
+    left: { style: "thin", color: { argb: "FFDDE2EC" } },
+    right: { style: "thin", color: { argb: "FFDDE2EC" } },
+  };
+
+  payments.forEach((p, idx) => {
+    const row = ws.addRow({
+      student: p.user?.name || "—",
+      email: p.user?.email || "—",
+      amount: p.amount || 0,
+      method: p.method || "—",
+      ref: p.referenceNumber || "—",
+      status: p.status,
+      receivedBy: p.receivedBy?.name || "—",
+      paidAt: p.paidAt ? new Date(p.paidAt).toLocaleDateString("en-PK") : "—",
+    });
+
+    const rowBg = idx % 2 === 0 ? "FFFFFFFF" : "FFFAFBFD";
+    row.eachCell((cell, colNumber) => {
+      cell.border = thinBorder;
+      cell.font = { name: "Calibri", size: 10.5 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+
+      if (colNumber === 3) {
+        cell.numFmt = '#,##0;(#,##0);"-"';
+        cell.alignment = { horizontal: "right" };
+      }
+      if (colNumber === 6) {
+        const sc = statusColors[p.status] || { bg: "FFF4F6FB", fg: "FF555555" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sc.bg } };
+        cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: sc.fg } };
+        cell.alignment = { horizontal: "center" };
+      }
+    });
+    row.height = 20;
+  });
+
+  const dataStart = 2;
+  const dataEnd = ws.lastRow.number;
+  const totalRow = ws.addRow({
+    student: "TOTAL",
+    amount: { formula: `SUM(C${dataStart}:C${dataEnd})` },
+  });
+  totalRow.eachCell((cell, col) => {
+    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF" + navy } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F6FB" } };
+    cell.border = { ...thinBorder, top: { style: "medium", color: { argb: "FF" + navy } } };
+    if (col === 3) {
+      cell.numFmt = '#,##0;(#,##0);"-"';
+      cell.alignment = { horizontal: "right" };
+    }
+  });
+  totalRow.height = 22;
+
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+  ws.autoFilter = { from: "A1", to: `H${dataEnd}` };
+
+  const date = new Date().toISOString().split("T")[0];
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="payments-report-${date}.xlsx"`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+};
+
+// ── 3. PDF DOWNLOAD (token-based, no auth middleware) ──
+exports.exportPaymentsPdf = async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).send("Token missing");
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).send("Link expired ya invalid hai");
+  }
+
+  const { paymentIds, filters } = decoded;
+  const paymentQuery = paymentIds?.length
+    ? { _id: { $in: paymentIds } }
+    : buildPaymentFilterQuery(filters || {});
+
+  const payments = await Payment.find(paymentQuery)
+    .populate("user", "name email")
+    .populate("receivedBy", "name")
+    .lean();
+
+  const date = new Date().toISOString().split("T")[0];
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="payments-report-${date}.pdf"`);
+
+  const doc = new PDFDocument({ margin: 40, size: "A4", layout: "landscape" });
+  doc.pipe(res);
+
+  // ── Header ──
+  doc.fontSize(16).fillColor("#1A1A2E").text("Payments Report", { align: "left" });
+  doc.fontSize(9).fillColor("#8a92a6")
+    .text(`Generated on ${new Date().toLocaleDateString("en-PK")} — ${payments.length} payment(s)`);
+  doc.moveDown(1);
+
+  // ── Table setup ──
+  const cols = [
+    { label: "Student", width: 140, key: (p) => p.user?.name || "—" },
+    { label: "Email", width: 180, key: (p) => p.user?.email || "—" },
+    { label: "Amount (Rs)", width: 100, key: (p) => Number(p.amount || 0).toLocaleString(), align: "right" },
+    { label: "Method", width: 80, key: (p) => p.method || "—" },
+    { label: "Reference #", width: 110, key: (p) => p.referenceNumber || "—" },
+    { label: "Status", width: 80, key: (p) => p.status },
+    { label: "Received By", width: 100, key: (p) => p.receivedBy?.name || "—" },
+  ];
+
+  const tableLeft = 40;
+  let y = doc.y + 5;
+  const rowHeight = 22;
+
+  const drawHeader = () => {
+    doc.rect(tableLeft, y, cols.reduce((s, c) => s + c.width, 0), rowHeight).fill("#1A1A2E");
+    let x = tableLeft;
+    doc.fontSize(9).fillColor("#FFFFFF");
+    cols.forEach((c) => {
+      doc.text(c.label, x + 6, y + 6, { width: c.width - 12, align: c.align || "left" });
+      x += c.width;
+    });
+    y += rowHeight;
+  };
+
+  drawHeader();
+
+  let total = 0;
+  payments.forEach((p, idx) => {
+    if (y + rowHeight > doc.page.height - 60) {
+      doc.addPage();
+      y = 40;
+      drawHeader();
+    }
+    if (idx % 2 === 1) {
+      doc.rect(tableLeft, y, cols.reduce((s, c) => s + c.width, 0), rowHeight).fill("#FAFBFD");
+    }
+    let x = tableLeft;
+    doc.fontSize(8.5).fillColor("#0f1117");
+    cols.forEach((c) => {
+      doc.text(c.key(p), x + 6, y + 6, { width: c.width - 12, align: c.align || "left" });
+      x += c.width;
+    });
+    total += Number(p.amount || 0);
+    y += rowHeight;
+  });
+
+  // ── Totals row ──
+  doc.rect(tableLeft, y, cols.reduce((s, c) => s + c.width, 0), rowHeight).fill("#F4F6FB");
+  doc.fontSize(9).fillColor("#1A1A2E");
+  doc.text("TOTAL", tableLeft + 6, y + 6, { width: cols[0].width - 12 });
+  doc.text(total.toLocaleString(), tableLeft + cols[0].width + cols[1].width + 6, y + 6, {
+    width: cols[2].width - 12, align: "right",
+  });
+
+  doc.end();
 };
 
 // ── Excel download endpoint ───────────────────────────────────

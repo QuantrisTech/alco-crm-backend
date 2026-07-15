@@ -47,7 +47,7 @@ router.patch("/:id/contract-edit", protect, authorize("super_admin", "admin", "s
 
 
 // ✅ Get Leads 
-router.get("/", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), getLeads);
+router.get("/", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep", "finance_manager"), getLeads);
 
 // ✅ Get Single Lead 
 router.get("/:id", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), getLeadById);
@@ -62,7 +62,7 @@ router.delete("/:id", protect, authorize("super_admin", "admin"), deleteLead);
 router.post("/:id/assign", protect, authorize("super_admin", "admin", "sales_manager"), assignLead);
 
 // ✅ Convert Lead 
-router.post("/:id/convert", protect, authorize("super_admin", "admin", "sales_manager"), convertLead);
+router.post("/:id/convert", protect, authorize("super_admin", "admin", "sales_manager", "finance_manager"), convertLead);
 
 // ✅ Mark Lost 
 router.post("/:id/mark-lost", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), setLeadToLost);

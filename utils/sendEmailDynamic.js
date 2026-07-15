@@ -75,6 +75,7 @@ const templates = {
     "send-receipt-receiving": require("../template/send-receipt-receiving.js"),
     "book-delivery": require("../template/book-delivery.js"),
     "receiving-report-admin": require("../template/receiving-report-admin.js"),
+    "payments-report-admin": require("../template/payments-report-admin.js"),
 };
 
 const sendEmailDynamic = async (options) => {

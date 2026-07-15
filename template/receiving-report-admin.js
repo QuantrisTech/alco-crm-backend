@@ -42,14 +42,26 @@ module.exports = `
       Generated: <strong style="color:#0f1117;">{{generatedDate}}</strong>
     </p>
 
-    <!-- DOWNLOAD BUTTON -->
-    <a href="{{downloadUrl}}"
-       style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#1a1a2e 0%,#0f3460 100%);color:#ffffff;text-decoration:none;font-family:Calibri,Arial,sans-serif;font-size:15px;font-weight:700;border-radius:12px;letter-spacing:0.04em;">
-      ⬇&nbsp;&nbsp;Download Excel Report
-    </a>
+    <!-- DOWNLOAD BUTTONS -->
+    <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+      <tr>
+        <td style="padding:0 8px;">
+          <a href="{{excelUrl}}"
+             style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg,#1a1a2e 0%,#0f3460 100%);color:#ffffff;text-decoration:none;font-family:Calibri,Arial,sans-serif;font-size:14px;font-weight:700;border-radius:12px;letter-spacing:0.03em;">
+            ⬇&nbsp;&nbsp;Download Excel
+          </a>
+        </td>
+        <td style="padding:0 8px;">
+          <a href="{{pdfUrl}}"
+             style="display:inline-block;padding:16px 32px;background:#ffffff;color:#1a1a2e;text-decoration:none;font-family:Calibri,Arial,sans-serif;font-size:14px;font-weight:700;border-radius:12px;letter-spacing:0.03em;border:2px solid #c8a84b;">
+            ⬇&nbsp;&nbsp;Download PDF
+          </a>
+        </td>
+      </tr>
+    </table>
 
     <p style="font-size:11px;color:#8a92a6;margin-top:16px;">
-      Link 24 ghante ke liye valid hai.
+      Links 24 ghante ke liye valid hain.
     </p>
 
   </div>
