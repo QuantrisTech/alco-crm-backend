@@ -261,7 +261,7 @@ exports.getAllRequests = async (req, res) => {
 // ── Admin: kisi ek requested program mein directly enroll kro (batch ke sath) ──
 exports.enrollInProgram = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // AudioFileAccess record id
     const { programId, batchId } = req.body;
 
     if (!programId || !batchId) {
@@ -278,24 +278,8 @@ exports.enrollInProgram = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found for this request" });
     }
 
-    // ✅ existing enrollment ho tw update karo, warna naya create karo
+    // ✅ pehle se enrolled hy tw dobara enroll na karo, sirf flag update karo
     const existingEnrollment = await Enrollment.findOne({ user: user._id, program: programId });
-
-    let enrollment;
-    if (existingEnrollment) {
-      existingEnrollment.batch = batchId;
-      existingEnrollment.status = "active";
-      existingEnrollment.accessStatus = "ACTIVE";
-      enrollment = await existingEnrollment.save();
-    } else {
-      enrollment = await Enrollment.create({
-        user: user._id,
-        program: programId,
-        batch: batchId,
-        status: "active",
-        accessStatus: "ACTIVE",
-      });
-    }
 
     record.programsRequested = record.programsRequested.map((p) =>
       p.program.toString() === programId.toString()
@@ -307,6 +291,25 @@ exports.enrollInProgram = async (req, res) => {
         }
         : p
     );
+
+    // ✅ naya enrollment banao — convertLead jasa
+    const enrollment = await Enrollment.create({
+      user: user._id,
+      program: programId,
+      batch: batchId,
+      status: "active",
+      accessStatus: "ACTIVE", 
+    });
+
+    // ✅ us program ka isAlready true karo AudioFileAccess record mein
+    const entry = record.programsRequested.find(
+      (p) => p.program.toString() === programId.toString()
+    );
+    if (entry) {
+      entry.isAlready = true;
+      entry.status = "enrolled";
+      entry.rejectReason = null;
+    }
 
     await record.save();
     await record.populate("programsRequested.program", "name");
