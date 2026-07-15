@@ -149,7 +149,21 @@ async function updateVisitor(req, res) {
 // GET /api/v1/visitors
 async function getAllVisitors(req, res) {
   try {
-    const visitors = await Visitor.find().sort({ createdAt: -1 });
+    const { filter } = req.query; // "mine" | "unassigned" | "all" (or no param at all)
+
+    const query = {};
+
+    if (filter === "mine") {
+      query.assigned_to = req.user._id;
+    } else if (filter === "unassigned") {
+      query.assigned_to = null;
+    }
+    // if filter is "all" or missing, query stays {} — returns everyone
+
+    const visitors = await Visitor.find(query)
+      .sort({ createdAt: -1 })
+      .populate("assigned_to", "name email");
+
     return res.status(200).json({ success: true, data: visitors });
   } catch (err) {
     console.error("getAllVisitors error:", err);
@@ -188,4 +202,81 @@ async function checkExistingStudent(req, res) {
   }
 }
 
-module.exports = { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor, checkExistingStudent };
+// PATCH /api/v1/visitors/:id/assign
+async function assignVisitor(req, res) {
+  try {
+    const { id } = req.params;
+    const adminId = req.user._id;
+    const adminName = req.user.name || req.user.email;
+
+    const visitor = await Visitor.findOne({ visitor_id: id });
+    if (!visitor) {
+      return res.status(404).json({ error: "Visitor not found" });
+    }
+
+    if (visitor.assigned_to && visitor.assigned_to.toString() !== adminId.toString()) {
+      return res.status(409).json({
+        error: "Visitor already assigned",
+        assigned_to: visitor.assigned_to,
+      });
+    }
+
+    visitor.assigned_to = adminId;
+    visitor.assigned_at = new Date();
+    await visitor.save();
+
+    return res.status(200).json({ success: true, data: visitor });
+  } catch (err) {
+    console.error("assignVisitor error:", err);
+    return res.status(500).json({ error: "Failed to assign visitor" });
+  }
+}
+
+// PATCH /api/v1/visitors/:id/unassign
+async function unassignVisitor(req, res) {
+  try {
+    const { id } = req.params;
+
+    const visitor = await Visitor.findOne({ visitor_id: id });
+    if (!visitor) {
+      return res.status(404).json({ error: "Visitor not found" });
+    }
+
+    visitor.assigned_to = null;
+    visitor.assigned_at = null;
+    await visitor.save();
+
+    return res.status(200).json({ success: true, data: visitor });
+  } catch (err) {
+    console.error("unassignVisitor error:", err);
+    return res.status(500).json({ error: "Failed to unassign visitor" });
+  }
+}
+
+// PATCH /api/v1/visitors/:id/reassign
+async function reassignVisitor(req, res) {
+  try {
+    const { id } = req.params;
+    const { new_admin_id } = req.body;
+
+    if (!new_admin_id) {
+      return res.status(400).json({ error: "new_admin_id is required" });
+    }
+
+    const visitor = await Visitor.findOne({ visitor_id: id });
+    if (!visitor) {
+      return res.status(404).json({ error: "Visitor not found" });
+    }
+
+    visitor.assigned_to = new_admin_id;
+    visitor.assigned_at = new Date();
+    await visitor.save();
+
+    return res.status(200).json({ success: true, data: visitor });
+  } catch (err) {
+    console.error("reassignVisitor error:", err);
+    return res.status(500).json({ error: "Failed to reassign visitor" });
+  }
+}
+
+module.exports = { upsertVisitor, promoteVisitor, getAllVisitors, updateVisitor, checkExistingStudent, assignVisitor, unassignVisitor, reassignVisitor };
