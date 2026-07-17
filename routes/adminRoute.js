@@ -10,8 +10,8 @@ const router = express.Router();
 
 // 🔒 Only Admin Can Access All Routes
 
-router.get("/users", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), getAllUsers);
-router.get("/assign-role-users", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), getAllAssignRole);
+router.get("/users", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager", "email_marketing"), getAllUsers);
+router.get("/assign-role-users", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager", "email_marketing"), getAllAssignRole);
 router.get("/users/recipients", protect, authorize("admin", "super_admin", "finance_manager"), getAdminRecipients);
 router.get("/users/:id", protect, authorize("admin", "super_admin"), getUserById);
 router.patch("/users/:id", protect, authorize("admin", "super_admin"), updateUser);
