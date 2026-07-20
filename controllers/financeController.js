@@ -5,6 +5,7 @@ const Enrollment = require("../models/enrollmentModel.js");
 const Lead = require("../models/leadModel.js");
 const User = require("../models/userModel.js");
 const Batch = require("../models/batchModel");
+const Certificate = require("../models/certificateModel.js");
 const { uploadToCloudinary } = require("../middlewares/uploadReceipt");
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
@@ -103,7 +104,7 @@ const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 exports.createInvoice = async (req, res) => {
   try {
     const {
-      user, enrollment, enrollments, items, // 👈 enrollments + items naye
+      user, enrollment, enrollments, items,
       totalAmount, dueDate, installments, invoiceNumber, issueDate,
     } = req.body;
 
@@ -135,7 +136,7 @@ exports.createInvoice = async (req, res) => {
     const invoice = await Invoice.create({
       invoiceNumber: finalInvoiceNumber,
       user,
-      enrollment: isBundle ? enrollments[0] : enrollment, // backward-compat, first wala
+      enrollment: isBundle ? enrollments[0] : enrollment,
       isBundle,
       enrollments: isBundle ? enrollments : undefined,
       items: isBundle ? items : undefined,
@@ -146,12 +147,46 @@ exports.createInvoice = async (req, res) => {
       installments: installments || [],
     });
 
-    // ── Bundle mein har enrollment pe invoice link karo ──
     if (isBundle) {
       await Enrollment.updateMany(
         { _id: { $in: enrollments } },
         { invoice: invoice._id }
       );
+    }
+
+    // ── 👇 Naya: har certificate-fee item ke liye alag Certificate record banao ──
+    const certItems = (items || []).filter((it) => it.feeType === "certificate");
+    for (const it of certItems) {
+      const already = await Certificate.findOne({ enrollment: it.enrollment, program: it.program });
+      if (!already) {
+        await Certificate.create({
+          user,
+          enrollment: it.enrollment,
+          program: it.program,
+          certificateFee: it.amount,
+          feePaid: false,
+          feeType: "certificate",
+          status: "locked",
+        });
+      }
+    }
+    // agar single (non-bundle) invoice mein bhi certificate installment ho to wahan se bhi handle karo:
+    if (!isBundle) {
+      const singleCertInst = (installments || []).find((i) => i.feeType === "certificate");
+      if (singleCertInst) {
+        const already = await Certificate.findOne({ enrollment, program: singleCertInst.program || undefined });
+        if (!already) {
+          await Certificate.create({
+            user,
+            enrollment,
+            program: singleCertInst.program,
+            certificateFee: singleCertInst.amount,
+            feePaid: false,
+            feeType: "certificate",
+            status: "locked",
+          });
+        }
+      }
     }
 
     await postInvoiceJournal({
@@ -779,7 +814,7 @@ exports.updateInstallment = async (req, res) => {
 exports.addInstallment = async (req, res) => {
   try {
     const { invoiceId } = req.params;
-    const { label, amount, dueDate, isAdvance } = req.body;
+    const { label, amount, dueDate, isAdvance, feeType } = req.body;
 
     if (!label || amount === undefined)
       return res.status(400).json({ success: false, message: "label and amount are required" });
@@ -789,50 +824,75 @@ exports.addInstallment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
     const before = invoice.toObject();
+    const numAmount = Number(amount);
+
+    // ── Certificate/Manual fee = NAYA paisa, invoice ke original total mein shamil nahi tha ──
+    const isExtraFee = feeType === "certificate" || feeType === "manual";
 
     invoice.installments.push({
       label,
-      amount: Number(amount),
+      amount: numAmount,
       dueDate: dueDate ? new Date(dueDate) : null,
       isAdvance: isAdvance ?? false,
+      feeType: feeType || "program",
       status: "PENDING",
       paidAmount: 0,
     });
 
-    // // Recalculate totalAmount
-    // const newTotal = invoice.installments.reduce(
-    //   (sum, inst) => sum + (inst.amount || 0), 0
-    // );
-    // // invoice.totalAmount = newTotal;
-    // // ❌ totalAmount ko touch nahi karna
+    if (isExtraFee) {
+      // ── Total amount badhao (ye extra fee hai, existing allocation ke andar nahi) ──
+      invoice.totalAmount = (invoice.totalAmount || 0) + numAmount;
+    } else {
+      // ── Normal installment — existing total ke andar hi allocate ho raha hai ──
+      const totalInstallments = invoice.installments.reduce(
+        (sum, i) => sum + (i.amount || 0),
+        0
+      );
 
-    // // ✅ sirf remaining update karo
-    // invoice.remainingAmount = Math.max(
-    //   0,
-    //   invoice.totalAmount - (invoice.paidAmount || 0)
-    // );
-    // // invoice.remainingAmount = Math.max(0, newTotal - (invoice.paidAmount || 0));
-
-    // ✅ VALIDATION YAHAN
-    const totalInstallments = invoice.installments.reduce(
-      (sum, i) => sum + (i.amount || 0),
-      0
-    );
-
-    if (totalInstallments > invoice.totalAmount) {
-      return res.status(400).json({
-        success: false,
-        message: "Installments exceed invoice total"
-      });
+      if (totalInstallments > invoice.totalAmount) {
+        return res.status(400).json({
+          success: false,
+          message: "Installments exceed invoice total"
+        });
+      }
     }
 
-    // ✅ remaining update
+    // ✅ remaining update — dono cases mein sahi rahega
     invoice.remainingAmount = Math.max(
       0,
       invoice.totalAmount - (invoice.paidAmount || 0)
     );
 
     await invoice.save();
+
+    // ── Extra fee add hui to journal mein bhi reflect karo (Receivable/Income badha) ──
+    if (isExtraFee) {
+      try {
+        await postInvoiceJournal({
+          amount: numAmount,
+          invoiceId: invoice._id,
+          userId: req.user._id,
+          description: `${label} added to invoice ${invoice.invoiceNumber}`,
+        });
+      } catch (journalErr) {
+        console.error("postInvoiceJournal failed:", journalErr.message);
+      }
+    }
+
+    // ── Certificate fee ke liye Certificate record bhi banao (agar single invoice mein direct add ho rahi hai) ──
+    if (feeType === "certificate") {
+      const already = await Certificate.findOne({ enrollment: invoice.enrollment });
+      if (!already) {
+        await Certificate.create({
+          user: invoice.user,
+          enrollment: invoice.enrollment,
+          program: invoice.items?.[0]?.program || undefined,
+          certificateFee: numAmount,
+          feePaid: false,
+          status: "locked",
+        });
+      }
+    }
 
     await logAudit({
       req,
@@ -1016,6 +1076,15 @@ exports.markInstallmentPaid = async (req, res) => {
 
     await invoice.save({ session }); // ✅ ek hi save — sab kuch persist ho jayega
 
+    // ── Certificate fee ka installment paid hua? → Certificate record update karo ──
+    if (installment.feeType === "certificate") {
+      await Certificate.findOneAndUpdate(
+        { enrollment: invoice.enrollment },
+        { feePaid: true, feePaidAt: paidAtValue },
+        { session }
+      );
+    }
+
     // ── 3. Journal post karo ─────────────────────────────────────────
     await postPaymentJournal({
       amount: installment.amount,
@@ -1159,6 +1228,8 @@ exports.editPaidInstallment = async (req, res) => {
     const before = invoice.toObject();
     const beforePayment = payment.toObject();
     const oldAmount = installment.amount;
+    // const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+    // const diff = newAmount - oldAmount;
 
     // ── Step 1: PURANI entry (50,000 wali) ko reverse karo — YE MISSING THA ──
     const reversed = await reverseJournalEntry({
@@ -1178,7 +1249,7 @@ exports.editPaidInstallment = async (req, res) => {
     }
 
     // ── Step 2: Naye correct values determine karo ──
-    const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+    // const newAmount = amount !== undefined ? Number(amount) : oldAmount;
     const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
     const newMethod = method || installment.method;
     const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
@@ -1196,6 +1267,8 @@ exports.editPaidInstallment = async (req, res) => {
     installment.method = newMethod;
     installment.referenceNumber = newRef;
     installment.paidAt = newPaidDate;
+
+    invoice.totalAmount = Math.max(0, invoice.totalAmount + diff);
 
     // ── Step 4: Invoice totals recalculate karo ──
     const totalPaid = invoice.installments.reduce(
@@ -1253,6 +1326,7 @@ exports.voidInstallmentPayment = async (req, res) => {
   try {
     const { invoiceId, installmentId } = req.params;
     const { reason } = req.body;
+    // const { reason, voidReason } = req.body;
 
     const invoice = await Invoice.findById(invoiceId).session(session);
     if (!invoice)
@@ -1282,6 +1356,7 @@ exports.voidInstallmentPayment = async (req, res) => {
     payment.status = "voided";
     payment.voidedBy = req.user._id;
     payment.voidedAt = new Date();
+    // payment.voidReason = voidReason || "other";
     payment.notes = `${payment.notes || ""} [VOIDED: ${reason || "no reason"}]`;
     await payment.save({ session });
 
@@ -1292,6 +1367,15 @@ exports.voidInstallmentPayment = async (req, res) => {
     installment.receiptUrl = null;
     installment.receiptPublicId = null;
     installment.paymentId = null; // 👈 link bhi clear karo
+
+    // ── Certificate fee void hua? → feePaid wapas false karo ──
+    if (installment.feeType === "certificate") {
+      await Certificate.findOneAndUpdate(
+        { enrollment: invoice.enrollment },
+        { feePaid: false, feePaidAt: null },
+        { session }
+      );
+    }
 
     const totalPaid = invoice.installments.reduce(
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0),

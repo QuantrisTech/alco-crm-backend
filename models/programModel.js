@@ -52,6 +52,14 @@ const programSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        certificateFee: {
+            type: Number,
+            default: 0,
+        },
+        manualFee: {
+            type: Number,
+            default: 5000,
+        },
         created_by: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",

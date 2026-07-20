@@ -75,7 +75,7 @@ router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "su
 router.patch(
   "/invoices/:invoiceId/installments/:installmentId/void",
   protect,
-  authorize("admin", "super_admin"),   // 👈 restrictTo → authorize
+  authorize("admin", "super_admin"),
   voidInstallmentPayment
 );
 router.delete(

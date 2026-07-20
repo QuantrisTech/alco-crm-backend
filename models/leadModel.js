@@ -123,6 +123,8 @@ const leadSchema = new mongoose.Schema(
       invoiceNumber: { type: String, unique: true }, // new
       issueDate: { type: Date, default: Date.now }, // new
       totalAmount: Number,
+      certificateFee: { type: Number, default: 0 },
+      manualFee: { type: Number, default: 0 },
       discount: { type: Number, default: 0 },
       advanceAmount: Number,
       advanceDueDate: Date,

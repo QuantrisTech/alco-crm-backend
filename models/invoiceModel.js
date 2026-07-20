@@ -19,6 +19,7 @@ const invoiceSchema = new mongoose.Schema(
       programName: String,
       enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
       amount: Number,
+      feeType: { type: String, enum: ["program", "certificate", "manual"], default: "program" }, 
     }],
 
     status: {
@@ -30,6 +31,7 @@ const invoiceSchema = new mongoose.Schema(
     dueDate: Date,
     issueDate: { type: Date, default: Date.now },
 
+
     installments: [{
       label: { type: String, default: "Installment" },
       amount: Number,
@@ -38,12 +40,15 @@ const invoiceSchema = new mongoose.Schema(
       paidAt: { type: Date, default: null },
       status: { type: String, enum: ["PENDING", "PAID", "OVERDUE"], default: "PENDING" },
       isAdvance: { type: Boolean, default: false },
+      feeType: { type: String, enum: ["program", "certificate", "manual"], default: "program" }, // 👈 add
+      program: { type: mongoose.Schema.Types.ObjectId, ref: "Program", default: null }, // 👈 add
+      enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment", default: null }, // 👈 add
       method: { type: String, enum: ["cash", "bank", "cheque", "manual"], default: null },
       referenceNumber: { type: String, default: null },
       notes: { type: String, default: null },
       receiptUrl: { type: String, default: null },
       receiptPublicId: { type: String, default: null },
-      paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", default: null }, // 👈 ye add karo
+      paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", default: null },
     }],
   },
   { timestamps: true }

@@ -11,6 +11,7 @@ const Invoice = require("../models/invoiceModel.js");
 const Program = require("../models/programModel.js");
 const Lead = require("../models/leadModel.js");
 const Batch = require("../models/batchModel");
+const Certificate = require("../models/certificateModel.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
 
@@ -789,7 +790,7 @@ exports.getLeads = async (req, res) => {
             search,
             assigned_to,
             quality,
-            hasPaymentPlan, 
+            hasPaymentPlan,
         } = req.query;
 
         const query = {};
@@ -1249,6 +1250,336 @@ exports.assignLead = async (req, res) => {
 //         res.status(500).json({ success: false, message: err.message });
 //     }
 // };
+// exports.convertLead = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
+//         if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+
+//         if (!lead.paymentPlan) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Please set a payment plan before converting.",
+//             });
+//         }
+
+//         // ── batch_id aur program_id req.body se set karo ──────────
+//         if (req.body.batch_id) lead.batch_id = req.body.batch_id;
+//         if (req.body.program_id) lead.program_id = req.body.program_id;
+
+//         // ── Step 1: Program + Batch fetch ─────────────────────────
+//         const program = await Program.findById(lead.program_id).select("name");
+//         const batchDoc = lead.batch_id
+//             ? await Batch.findById(lead.batch_id).select("name start_date end_date")
+//             : null;
+
+//         // ── Step 1.5: Already enrolled? (check BEFORE mutating lead) ──
+//         const existingUser = await User.findOne({ email: lead.email });
+//         if (existingUser) {
+//             const existingEnrollment = await Enrollment.findOne({
+//                 user: existingUser._id,
+//                 program: lead.program_id,
+//             });
+
+//             if (existingEnrollment) {
+//                 return res.status(409).json({
+//                     success: false,
+//                     message: "User is already enrolled in this program.",
+//                     data: { enrollmentId: existingEnrollment._id },
+//                 });
+//             }
+//         }
+
+//         // ── Step 2: Lead convert + save ───────────────────────────
+//         lead.status = "converted";
+//         await lead.save();
+
+//         // ── Step 3: User banao ────────────────────────────────────
+//         const crypto = require("crypto");
+//         const tempPassword = crypto.randomBytes(8).toString("hex");
+//         let user = existingUser;
+//         let isNewUser = false;
+
+//         if (!user) {
+//             isNewUser = true;
+//             user = await User.create({
+//                 name: `${lead.first_name} ${lead.last_name}`,
+//                 email: lead.email,
+//                 phone: lead.phone,
+//                 cnic: lead.contractDetails?.cnic || "",
+//                 address: lead.contractDetails?.currentAddress || "",
+//                 role: "student",
+//                 password: tempPassword,
+//             });
+//         }
+
+//         // ── Step 3.5: lead.user_id update karo ───────────────────
+//         lead.user_id = user._id;
+//         await lead.save();
+
+//         const existingEnrollment = await Enrollment.findOne({
+//             user: user._id,
+//             program: lead.program_id,
+//         });
+
+//         if (existingEnrollment) {
+//             return res.status(409).json({
+//                 success: false,
+//                 message: "User is already enrolled in this program.",
+//                 data: { enrollmentId: existingEnrollment._id },
+//             });
+//         }
+
+//         // ── Step 4: Enrollment banao ──────────────────────────────
+//         const enrollment = await Enrollment.create({
+//             user: user._id,
+//             program: lead.program_id,
+//             batch: lead.batch_id,
+//             status: "active",
+//             accessStatus: "RESTRICTED",
+//             assigned_to: lead.assigned_to,
+//         });
+
+//         // ── Step 5: Invoice Number ────────────────────────────────
+//         // const count = await Invoice.countDocuments();
+//         // const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+//         // // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+//         // let invoiceNumber = lead.paymentPlan.invoiceNumber;
+//         // if (!invoiceNumber) {
+//         //     const count = await Invoice.countDocuments();
+//         //     invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+//         // }
+//         // ── Step 5: Invoice Number ────────────────────────────────
+//         const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
+
+//         let invoiceNumber = lead.paymentPlan.invoiceNumber;
+//         if (invoiceNumber) {
+//             // 👇 NAYA — duplicate check
+//             const exists = await Invoice.findOne({ invoiceNumber });
+//             if (exists) {
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: `Invoice number ${invoiceNumber} already exists`,
+//                 });
+//             }
+//         } else {
+//             const count = await Invoice.countDocuments();
+//             invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+//         }
+
+//         // ── Step 6: Invoice banao ─────────────────────────────────
+//         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
+
+//         const allInstallments = [
+//             {
+//                 label: "Advance Payment",
+//                 amount: advanceAmount,
+//                 dueDate: advanceDueDate,
+//                 status: "PENDING",
+//                 paidAmount: 0,
+//                 isAdvance: true,
+//             },
+//             ...(installments || []).map((inst) => ({
+//                 label: inst.label || "Installment",
+//                 amount: inst.amount,
+//                 dueDate: inst.dueDate,
+//                 status: "PENDING",
+//                 paidAmount: 0,
+//                 isAdvance: false,
+//             })),
+//         ];
+
+//         const invoice = await Invoice.create({
+//             invoiceNumber,
+//             user: user._id,
+//             enrollment: enrollment._id,
+//             totalAmount,
+//             remainingAmount: totalAmount,
+//             paidAmount: 0,
+//             dueDate: advanceDueDate,
+//             issueDate: paymentPlanIssueDate,
+//             installments: allInstallments,
+//             notes: lead.paymentPlan.notes || "",
+//             status: "PENDING",
+//         });
+
+//         // ✅ ADD THIS
+//         try {
+//             await postInvoiceJournal({
+//                 amount: totalAmount,
+//                 invoiceId: invoice._id,
+//                 userId: req.user._id,
+//                 description: `Invoice ${invoiceNumber} — Lead converted`,
+//                 date: paymentPlanIssueDate,
+//             });
+//         } catch (journalErr) {
+//             console.error("postInvoiceJournal failed:", journalErr.message);
+//         }
+
+//         lead.invoiceNumber = invoiceNumber;
+//         await lead.save();
+
+//         // ── Step 7: Enrollment pe invoice link ───────────────────
+//         await Enrollment.findByIdAndUpdate(enrollment._id, { invoice: invoice._id });
+
+//         // ── Step 8: Email helpers ─────────────────────────────────
+//         const formatDate = (d) =>
+//             d ? new Date(d).toLocaleDateString("en-PK", {
+//                 day: "2-digit", month: "short", year: "numeric",
+//             }) : "—";
+
+//         const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
+
+//         // ── Step 9: Installment rows HTML (qty column added) ──────
+//         const installmentRows = invoice.installments.map((inst, i) => {
+//             const isAdv = inst.isAdvance;
+//             const isPaid = inst.status === "PAID";
+//             return `
+//       <tr style="background:${isAdv ? "#fdf6e3" : "#ffffff"}; border-bottom:1px solid #dde2ec;">
+//         <td style="padding:13px 14px; font-family:'Courier New',monospace; font-size:11px; font-weight:600; color:#8a92a6; width:36px;">
+//           ${String(i + 1).padStart(2, "0")}
+//         </td>
+//         <td style="padding:13px 14px; font-size:13px; color:#0f1117;">
+//           <span style="font-weight:700;">${isAdv ? "Advance Payment" : inst.label || `Installment ${i + 1}`}</span>
+//           ${isAdv ? `<span style="display:inline-block; background:#c8a84b; color:#5a3a00; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:2px 8px; border-radius:4px; margin-left:7px;">Advance</span>` : ""}
+//         </td>
+//         <td style="padding:13px 14px; text-align:center; font-family:'Courier New',monospace; font-size:12px; color:#4a5060; width:50px;">
+//           1
+//         </td>
+//         <td style="padding:13px 14px; font-family:'Courier New',monospace; font-size:11.5px; color:#4a5060;">
+//           ${formatDate(inst.dueDate)}
+//         </td>
+//         <td style="padding:13px 14px;">
+//           <span style="display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:5px;
+//             background:${isPaid ? "#eafaf3" : "#fff8e8"}; color:${isPaid ? "#1a8a57" : "#b07800"};">
+//             ${inst.status}
+//           </span>
+//         </td>
+//         <td style="padding:13px 14px; text-align:right; font-family:'Courier New',monospace; font-weight:600; font-size:13px; color:#0f1117;">
+//           Rs ${formatAmount(inst.amount)}
+//         </td>
+//       </tr>`;
+//         }).join("");
+
+//         // ── Step 10: Invoice Email ────────────────────────────────
+//         try {
+//             await sendEmailDynamic({
+//                 to: user.email,
+//                 subject: `Your Enrollment Invoice ${invoice.invoiceNumber} | ALCO`,
+//                 templateName: "generate-invoice",
+//                 replacements: {
+//                     // ── Invoice meta ──────────────────────────────
+//                     invoiceNumber: invoice.invoiceNumber,
+//                     invoiceStatus: invoice.status,
+//                     issueDate: formatDate(new Date()),
+//                     advanceDueDate: formatDate(invoice.dueDate),
+//                     enrollmentId: enrollment._id.toString().slice(0, 8) + "..." + enrollment._id.toString().slice(-4),
+
+//                     // ── Batch ─────────────────────────────────────
+//                     batchName: batchDoc?.name || "—",
+//                     batchStartDate: formatDate(batchDoc?.start_date) || "—",
+//                     batchEndDate: formatDate(batchDoc?.end_date) || "—",
+
+//                     // ── Student ───────────────────────────────────
+//                     studentName: user.name,
+//                     studentEmail: user.email,
+//                     studentPhone: user.phone || "—",
+//                     studentCnic: lead.contractDetails?.cnic || "—",
+//                     studentAddress: lead.contractDetails?.currentAddress || "—",
+//                     studentProfession: lead.profession || lead.contractDetails?.occupation || "—",
+
+//                     // ── Sales ─────────────────────────────────────
+//                     salesManagerName: lead.assigned_to?.name || "Sales Team",
+//                     salesManagerEmail: lead.assigned_to?.email || "sales@alco.com",
+
+//                     // ── Program ───────────────────────────────────
+//                     programName: program?.name || "NLP Program",
+//                     planNotesBlock: lead.paymentPlan?.notes
+//                         ? `<div style="font-size:12px;color:#4a5060;font-style:italic;padding:10px 14px;
+//                              background:#ffffff;border-radius:8px;border-left:3px solid #c8a84b;">
+//                              ${lead.paymentPlan.notes}
+//                            </div>`
+//                         : "",
+
+//                     // ── Installments ──────────────────────────────
+//                     installmentRows,
+
+//                     // ── Totals ────────────────────────────────────
+//                     totalAmount: formatAmount(invoice.totalAmount),
+//                     paidAmount: formatAmount(invoice.paidAmount || 0),
+//                     remainingAmount: formatAmount(invoice.remainingAmount || invoice.totalAmount),
+//                     advanceAmount: formatAmount(invoice.installments.find((i) => i.isAdvance)?.amount || 0),
+//                 },
+//             });
+//         } catch (emailErr) {
+//             console.error("Invoice email failed:", emailErr.message);
+//         }
+
+//         // ── Step 11: Credentials Email (new user only) ────────────
+//         if (isNewUser) {
+//             try {
+//                 await sendEmailDynamic({
+//                     to: user.email,
+//                     subject: "Your Login Credentials | ALCO",
+//                     templateName: "send-user-credentials",
+//                     replacements: {
+//                         userName: user.name,
+//                         userEmail: user.email,
+//                         password: tempPassword,
+//                     },
+//                 });
+//             } catch (credErr) {
+//                 console.error("Credentials email failed:", credErr.message);
+//             }
+//         }
+
+//         // ── Step 12: Audit Log ────────────────────────────────────
+//         await logAudit({
+//             req,
+//             action: "LEAD_CONVERTED",
+//             module: "leads",
+//             targetId: lead._id,
+//             after: {
+//                 enrollment: enrollment._id,
+//                 invoice: invoice._id,
+//                 user: user._id,
+//                 batch_id: lead.batch_id,
+//             },
+//         });
+
+//         res.status(201).json({
+//             success: true,
+//             message: "Lead converted — invoice and credentials emailed",
+//             data: {
+//                 user: {
+//                     _id: user._id,
+//                     name: user.name,
+//                     email: user.email,
+//                     isNewUser,
+//                 },
+//                 enrollment: {
+//                     _id: enrollment._id,
+//                     accessStatus: "RESTRICTED",
+//                     batch: lead.batch_id,
+//                 },
+//                 invoice: {
+//                     _id: invoice._id,
+//                     invoiceNumber,
+//                     totalAmount,
+//                     status: "PENDING",
+//                 },
+//                 lead: {
+//                     _id: lead._id,
+//                     batch_id: lead.batch_id,
+//                     user_id: lead.user_id,
+//                 },
+//             },
+//         });
+
+//     } catch (err) {
+//         console.error("convertLead error:", err.message);
+//         res.status(500).json({ success: false, message: err.message });
+//     }
+// };
 exports.convertLead = async (req, res) => {
     try {
         const lead = await Lead.findById(req.params.id).populate("assigned_to", "name email");
@@ -1365,8 +1696,17 @@ exports.convertLead = async (req, res) => {
             invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
         }
 
-        // ── Step 6: Invoice banao ─────────────────────────────────
-        const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
+        // ── Step 6: certFee seedha paymentPlan se — checkbox se frontend ne bheja hoga ──
+        const {
+            totalAmount,                        // 👈 ye already program+cert+manual sab included hai (interested stage se)
+            advanceAmount,
+            advanceDueDate,
+            installments,
+            certificateFee: certFee = 0,
+            manualFee: manuFee = 0,
+        } = lead.paymentPlan;
+
+        const programFee = totalAmount - certFee - manuFee;
 
         const allInstallments = [
             {
@@ -1387,10 +1727,39 @@ exports.convertLead = async (req, res) => {
             })),
         ];
 
+        if (certFee > 0) {
+            allInstallments.push({
+                label: "Certificate Fee",
+                amount: certFee,
+                dueDate: advanceDueDate,
+                status: "PENDING",
+                paidAmount: 0,
+                isAdvance: false,
+                feeType: "certificate",
+            });
+        }
+
+        if (manuFee > 0) {
+            allInstallments.push({
+                label: "Manual Fee",
+                amount: manuFee,
+                dueDate: advanceDueDate,
+                status: "PENDING",
+                paidAmount: 0,
+                isAdvance: false,
+                feeType: "manual",
+            });
+        }
+
         const invoice = await Invoice.create({
             invoiceNumber,
             user: user._id,
             enrollment: enrollment._id,
+            items: [
+                { program: lead.program_id, programName: program.name, enrollment: enrollment._id, amount: programFee },
+                ...(certFee > 0 ? [{ program: lead.program_id, programName: `${program.name} — Certificate Fee`, enrollment: enrollment._id, amount: certFee, feeType: "certificate" }] : []),
+                ...(manuFee > 0 ? [{ program: lead.program_id, programName: `${program.name} — Manual Fee`, enrollment: enrollment._id, amount: manuFee, feeType: "manual" }] : []),
+            ],
             totalAmount,
             remainingAmount: totalAmount,
             paidAmount: 0,
@@ -1428,7 +1797,7 @@ exports.convertLead = async (req, res) => {
 
         const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
 
-        // ── Step 9: Installment rows HTML (qty column added) ──────
+        // ── Step 9: Installment rows HTML ──────────────────────────
         const installmentRows = invoice.installments.map((inst, i) => {
             const isAdv = inst.isAdvance;
             const isPaid = inst.status === "PAID";
@@ -1947,6 +2316,170 @@ exports.addActivity = async (req, res) => {
 };
 
 // ─── 1. Mark Lead as Interested ──────────────────────────────
+// exports.markInterested = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id);
+//         if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+//         // Status update
+//         lead.status = "interested";
+
+//         // Contract auto-fill (lead data se)
+//         // lead.contractDetails = {
+//         //     fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
+//         //     email: lead.email,
+//         //     phone: lead.phone || "",
+//         //     programName: lead.program_name || "",
+//         //     status: "pending",
+//         // };
+//         // ✅ Pehle existing contractDetails spread karo, phir override karo
+//         lead.contractDetails = {
+//             ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},
+//             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
+//             email: lead.email,
+//             phone: lead.phone || "",
+//             programName: lead.program_name || "",
+//             status: lead.contractDetails?.status || "pending",
+//         };
+
+//         // Payment plan agar bheja hai to save karo
+//         if (req.body.paymentPlan) {
+//             const { invoiceNumber, issueDate, ...rest } = req.body.paymentPlan;
+
+//             // ── Certificate fee fetch karo program se ──────────────
+//             const program = await Program.findById(lead.program_id).select("certificateFee");
+//             const certFee = program?.certificateFee || 0;
+
+//             lead.paymentPlan = {
+//                 ...rest,
+//                 certificateFee: certFee,                                 // 👈 add
+//                 totalAmount: (rest.totalAmount || 0) + certFee,          // 👈 total mein include karo
+//                 invoiceNumber: invoiceNumber || undefined,
+//                 issueDate: issueDate ? new Date(issueDate) : new Date(),
+//                 createdBy: req.user._id,
+//                 createdAt: new Date(),
+//             };
+//         }
+
+//         await lead.save();
+
+//         // ── User ko notify karo ──────────────────────────────────
+//         if (lead.user_id) {
+//             // In-app notification
+//             await notifyStatusChanged({
+//                 userId: lead.user_id.toString(),
+//                 leadName: `${lead.first_name} ${lead.last_name}`,
+//                 leadId: lead._id.toString(),
+//                 newStatus: "interested",
+//                 changedBy: req.user._id.toString(),
+//             });
+
+//             // Email
+//             const user = await User.findById(lead.user_id).select("email name");
+//             if (user?.email) {
+//                 await sendEmailDynamic({
+//                     to: user.email,
+//                     subject: "You've Been Shortlisted! Complete Your Contract 🎉",
+//                     templateName: "lead-interested",
+//                     replacements: {
+//                         UserName: user.name || lead.first_name,
+//                         ProgramName: lead.program_name || "the program",
+//                         ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
+//                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
+//                         SupportEmail: "alco@support.com",
+//                         YourCompanyName: "Al-and-co",
+//                     },
+//                 });
+//             }
+//         }
+
+//         res.status(200).json({ success: true, data: lead });
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
+// exports.markInterested = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id);
+//         if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+//         // Status update
+//         lead.status = "interested";
+
+//         // Contract auto-fill (lead data se)
+//         // lead.contractDetails = {
+//         //     fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
+//         //     email: lead.email,
+//         //     phone: lead.phone || "",
+//         //     programName: lead.program_name || "",
+//         //     status: "pending",
+//         // };
+//         // ✅ Pehle existing contractDetails spread karo, phir override karo
+//         lead.contractDetails = {
+//             ...lead.contractDetails?.toObject?.() ?? lead.contractDetails ?? {},
+//             fullName: `${lead.first_name} ${lead.last_name || ""}`.trim(),
+//             email: lead.email,
+//             phone: lead.phone || "",
+//             programName: lead.program_name || "",
+//             status: lead.contractDetails?.status || "pending",
+//         };
+
+//         // Payment plan agar bheja hai to save karo
+//         if (req.body.paymentPlan) {
+//             const { invoiceNumber, issueDate, ...rest } = req.body.paymentPlan;
+
+//             // ── Certificate fee fetch karo program se ──────────────
+//             const program = await Program.findById(lead.program_id).select("certificateFee");
+//             const certFee = program?.certificateFee || 0;
+
+//             lead.paymentPlan = {
+//                 ...rest,
+//                 certificateFee: certFee,                                 // 👈 add
+//                 totalAmount: (rest.totalAmount || 0) + certFee,          // 👈 total mein include karo
+//                 invoiceNumber: invoiceNumber || undefined,
+//                 issueDate: issueDate ? new Date(issueDate) : new Date(),
+//                 createdBy: req.user._id,
+//                 createdAt: new Date(),
+//             };
+//         }
+
+//         await lead.save();
+
+//         // ── User ko notify karo ──────────────────────────────────
+//         if (lead.user_id) {
+//             // In-app notification
+//             await notifyStatusChanged({
+//                 userId: lead.user_id.toString(),
+//                 leadName: `${lead.first_name} ${lead.last_name}`,
+//                 leadId: lead._id.toString(),
+//                 newStatus: "interested",
+//                 changedBy: req.user._id.toString(),
+//             });
+
+//             // Email
+//             const user = await User.findById(lead.user_id).select("email name");
+//             if (user?.email) {
+//                 await sendEmailDynamic({
+//                     to: user.email,
+//                     subject: "You've Been Shortlisted! Complete Your Contract 🎉",
+//                     templateName: "lead-interested",
+//                     replacements: {
+//                         UserName: user.name || lead.first_name,
+//                         ProgramName: lead.program_name || "the program",
+//                         ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
+//                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
+//                         SupportEmail: "alco@support.com",
+//                         YourCompanyName: "Al-and-co",
+//                     },
+//                 });
+//             }
+//         }
+
+//         res.status(200).json({ success: true, data: lead });
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
 exports.markInterested = async (req, res) => {
     try {
         const lead = await Lead.findById(req.params.id);
@@ -1975,9 +2508,13 @@ exports.markInterested = async (req, res) => {
 
         // Payment plan agar bheja hai to save karo
         if (req.body.paymentPlan) {
-            const { invoiceNumber, issueDate, ...rest } = req.body.paymentPlan;
+            const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, ...rest } = req.body.paymentPlan;
+
             lead.paymentPlan = {
                 ...rest,
+                certificateFee,
+                manualFee,
+                totalAmount: (rest.totalAmount || 0) + certificateFee + manualFee,
                 invoiceNumber: invoiceNumber || undefined,
                 issueDate: issueDate ? new Date(issueDate) : new Date(),
                 createdBy: req.user._id,
@@ -2278,23 +2815,86 @@ exports.updateContract = async (req, res) => {
 
 
 // ─── 3. Update Payment Plan (admin) — notification bhi ───────
+// exports.updatePaymentPlan = async (req, res) => {
+//     try {
+//         const lead = await Lead.findById(req.params.id);
+//         if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+
+//         // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+
+//         const { invoiceNumber, issueDate, ...rest } = req.body;
+
+//         // ── Certificate fee fetch karo program se ──────────────
+//         const program = await Program.findById(lead.program_id).select("certificateFee");
+//         const certFee = program?.certificateFee || 0;
+
+//         lead.paymentPlan = {
+//             ...rest,
+//             certificateFee: certFee,
+//             totalAmount: (rest.totalAmount || 0) + certFee,
+//             invoiceNumber: invoiceNumber || lead.paymentPlan?.invoiceNumber || undefined,
+//             issueDate: issueDate ? new Date(issueDate) : (lead.paymentPlan?.issueDate || new Date()),
+//             createdBy: req.user._id,
+//             createdAt: new Date(),
+//         };
+
+//         await lead.save();
+
+//         // ── User ko notify karo ──────────────────────────────────
+//         if (lead.user_id) {
+//             await notifyPaymentPlanSet({
+//                 userId: lead.user_id.toString(),
+//                 leadName: `${lead.first_name} ${lead.last_name}`,
+//                 leadId: lead._id.toString(),
+//                 triggeredBy: req.user._id.toString(),
+//             });
+
+//             const user = await User.findById(lead.user_id).select("email name");
+//             if (user?.email) {
+//                 await sendEmailDynamic({
+//                     to: user.email,
+//                     subject: "Your Payment Plan is Ready 💳",
+//                     templateName: "payment-plan-updated",
+//                     replacements: {
+//                         UserName: user.name || lead.first_name,
+//                         ProgramName: lead.program_name || "the program",
+//                         TotalAmount: `Rs ${Number(req.body.totalAmount || 0).toLocaleString()}`,
+//                         AdvanceAmount: `Rs ${Number(req.body.advanceAmount || 0).toLocaleString()}`,
+//                         Installments: req.body.installments?.length || 0,
+//                         // DashboardLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract/${lead._id}`,
+//                         DashboardLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
+//                         SupportEmail: "alco@support.com",
+//                         YourCompanyName: "Al-and-co",
+//                     },
+//                 });
+//             }
+//         }
+
+//         res.status(200).json({ success: true, data: lead });
+//     } catch (err) {
+//         res.status(500).json({ message: err.message });
+//     }
+// };
 exports.updatePaymentPlan = async (req, res) => {
     try {
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
-
-        // const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
-
-        const { invoiceNumber, issueDate, ...rest } = req.body;
+        const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, ...rest } = req.body;
 
         lead.paymentPlan = {
             ...rest,
-            invoiceNumber: invoiceNumber || lead.paymentPlan?.invoiceNumber || undefined, // 👈 add
-            issueDate: issueDate ? new Date(issueDate) : (lead.paymentPlan?.issueDate || new Date()), // 👈 add
+            certificateFee,
+            manualFee,
+            totalAmount: (rest.totalAmount || 0) + certificateFee + manualFee,
+            invoiceNumber: invoiceNumber || lead.paymentPlan?.invoiceNumber || undefined,
+            issueDate: issueDate ? new Date(issueDate) : (lead.paymentPlan?.issueDate || new Date()),
             createdBy: req.user._id,
             createdAt: new Date(),
         };
+
+        await lead.save();
 
         await lead.save();
 

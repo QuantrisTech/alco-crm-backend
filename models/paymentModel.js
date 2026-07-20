@@ -28,7 +28,7 @@ const paymentSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    paidAt: { type: Date, default: Date.now }, 
+    paidAt: { type: Date, default: Date.now },
 
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
@@ -42,7 +42,13 @@ const paymentSchema = new mongoose.Schema(
     receiptUrl: { type: String, default: null },
     receiptPublicId: { type: String, default: null },
 
-    voidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, 
+    voidReason: {
+      type: String,
+      enum: ["bounced", "duplicate_entry", "wrong_amount", "student_dispute", "other"],
+      default: null,
+    },
+
+    voidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     voidedAt: Date,
 
     notes: String,
