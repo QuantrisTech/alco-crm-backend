@@ -1249,7 +1249,7 @@ exports.editPaidInstallment = async (req, res) => {
     }
 
     // ── Step 2: Naye correct values determine karo ──
-    // const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+    const newAmount = amount !== undefined ? Number(amount) : oldAmount;
     const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
     const newMethod = method || installment.method;
     const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
