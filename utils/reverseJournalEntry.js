@@ -13,7 +13,22 @@ async function reverseJournalEntry({ sourceType, sourceRef, userId, description,
     sourceType,
     sourceRef,
     status: "posted",
+    isReversal: false,
   }).session(session);
+
+  console.log("Found posted entries:", originalEntries.length);
+
+  originalEntries.forEach((je) => {
+    console.log({
+      entryNumber: je.entryNumber,
+      status: je.status,
+      sourceRef: je.sourceRef.toString(),
+      lines: je.lines.map(l => ({
+        type: l.type,
+        amount: l.amount,
+      })),
+    });
+  });
 
   if (!originalEntries.length) return [];
 
@@ -39,6 +54,11 @@ async function reverseJournalEntry({ sourceType, sourceRef, userId, description,
           status: "posted",
           createdBy: userId,
           entryNumber: generateUniqueNumber("JE-REV"),
+
+          // ✅ ADD THESE TWO LINES
+          isReversal: true,
+          originalJournal: original._id,
+
           period: {
             month: new Date().getMonth() + 1,
             year: new Date().getFullYear(),
@@ -50,22 +70,62 @@ async function reverseJournalEntry({ sourceType, sourceRef, userId, description,
     );
 
     // ── Account balances wapas adjust karo ──────────────────────
+    // for (const line of flippedLines) {
+    //   const account = await Account.findById(line.account).session(session);
+    //   if (!account) continue;
+
+    //   const isDebitNormal = ["asset", "expense"].includes(account.type);
+    //   const delta =
+    //     line.type === "debit"
+    //       ? isDebitNormal
+    //         ? line.amount
+    //         : -line.amount
+    //       : isDebitNormal
+    //       ? -line.amount
+    //       : line.amount;
+
+    //   account.currentBalance += delta;
+    //   await account.save({ session });
+    // }
+
     for (const line of flippedLines) {
       const account = await Account.findById(line.account).session(session);
-      if (!account) continue;
+
+      if (!account) {
+        console.log("Account NOT FOUND:", line.account);
+        continue;
+      }
+
+      console.log("--------------------------------");
+      console.log("Account:", account.code);
+      console.log("Type:", account.type);
+      console.log("Line Type:", line.type);
+      console.log("Amount:", line.amount);
+      console.log("Before:", account.currentBalance);
 
       const isDebitNormal = ["asset", "expense"].includes(account.type);
+
       const delta =
         line.type === "debit"
-          ? isDebitNormal
-            ? line.amount
-            : -line.amount
-          : isDebitNormal
-          ? -line.amount
-          : line.amount;
+          ? (isDebitNormal ? line.amount : -line.amount)
+          : (isDebitNormal ? -line.amount : line.amount);
+
+      console.log("Delta:", delta);
 
       account.currentBalance += delta;
+
+      console.log("After:", account.currentBalance);
+
       await account.save({ session });
+
+      const verify = await Account.findById(account._id).session(session);
+
+      console.log("================================");
+      console.log("Saved Account:", verify.code);
+      console.log("Saved Balance:", verify.currentBalance);
+      console.log("================================");
+
+      console.log("Skipping save()");
     }
 
     // ── Original entry ko reversed mark karo ────────────────────

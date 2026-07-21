@@ -43,6 +43,17 @@ const journalEntrySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    isReversal: {
+      type: Boolean,
+      default: false,
+    },
+
+    originalJournal: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "JournalEntry",
+      default: null,
+    },
+
     lines: {
       type: [journalLineSchema],
       validate: {

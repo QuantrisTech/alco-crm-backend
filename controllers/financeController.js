@@ -10,7 +10,8 @@ const { uploadToCloudinary } = require("../middlewares/uploadReceipt");
 const logAudit = require("../utils/auditLogger.js");
 const mongoose = require("mongoose");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
-const { postPaymentJournal, postInvoiceJournal } = require("../utils/postPaymentJournal.js");
+const { postPaymentJournal } = require("../utils/postPaymentJournal.js");
+const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const jwt = require("jsonwebtoken");
 const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
@@ -1197,13 +1198,153 @@ exports.markInstallmentPaid = async (req, res) => {
 };
 
 // ── EDIT A PAID INSTALLMENT (amount/date correction after payment) ──
+// exports.editPaidInstallment = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { invoiceId, installmentId } = req.params;
+//     const { amount, paidDate, method, referenceNumber, notes, reason } = req.body;
+
+//     if (!reason) {
+//       await session.abortTransaction();
+//       return res.status(400).json({ success: false, message: "Reason for correction is required" });
+//     }
+
+//     const invoice = await Invoice.findById(invoiceId).session(session);
+//     if (!invoice)
+//       return res.status(404).json({ success: false, message: "Invoice not found" });
+
+//     const installment = invoice.installments.id(installmentId);
+//     if (!installment)
+//       return res.status(404).json({ success: false, message: "Installment not found" });
+
+//     if (installment.status !== "PAID")
+//       return res.status(400).json({ success: false, message: "Only paid installments can be corrected" });
+
+//     const payment = await Payment.findById(installment.paymentId).session(session);
+//     if (!payment || payment.status !== "approved")
+//       return res.status(404).json({ success: false, message: "Matching payment record not found" });
+
+//     const before = invoice.toObject();
+//     const beforePayment = payment.toObject();
+//     const oldAmount = installment.amount;
+//     const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+//     const diff = newAmount - oldAmount;
+
+//     const isExtraFee = installment.feeType === "certificate" || installment.feeType === "manual";
+//     if (isExtraFee) {
+//       invoice.totalAmount = Math.max(0, invoice.totalAmount + diff);
+
+//       if (diff !== 0) {
+//         await postInvoiceJournal({
+//           amount: diff,   // ⚠️ negative bhi ho sakta hai — postInvoiceJournal ko ye handle karna hoga
+//           invoiceId: invoice._id,
+//           userId: req.user._id,
+//           description: `${installment.label} corrected — adjusting AR/Income by ${diff > 0 ? "+" : ""}${diff} (${invoice.invoiceNumber}): ${reason}`,
+//           date: newPaidDate || new Date(),
+//           session,
+//         });
+//       }
+//     }
+
+
+//     // ── Step 1: PURANI entry (50,000 wali) ko reverse karo — YE MISSING THA ──
+//     const reversed = await reverseJournalEntry({
+//       sourceType: "payment",
+//       sourceRef: payment._id,
+//       userId: req.user._id,
+//       description: `Reversal — correcting ${installment.label} (${invoice.invoiceNumber}): ${reason}`,
+//       session,
+//     });
+
+//     if (!reversed.length) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "No posted journal entry found for this payment — cannot correct safely",
+//       });
+//     }
+
+//     // ── Step 2: Naye correct values determine karo ──
+//     // const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+//     const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
+//     const newMethod = method || installment.method;
+//     const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
+
+//     // ── Step 3: Payment + installment record update karo ──
+//     payment.amount = newAmount;
+//     payment.method = newMethod;
+//     payment.referenceNumber = newRef;
+//     payment.paidAt = newPaidDate;
+//     payment.notes = `${payment.notes || ""} [CORRECTED from Rs ${oldAmount} to Rs ${newAmount}: ${reason}]`;
+//     await payment.save({ session });
+
+//     installment.amount = newAmount;
+//     installment.paidAmount = newAmount;
+//     installment.method = newMethod;
+//     installment.referenceNumber = newRef;
+//     installment.paidAt = newPaidDate;
+
+//     // invoice.totalAmount = Math.max(0, invoice.totalAmount + diff);
+
+//     // ── Step 4: Invoice totals recalculate karo ──
+//     const totalPaid = invoice.installments.reduce(
+//       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
+//     );
+//     invoice.paidAmount = totalPaid;
+//     invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+//     invoice.status =
+//       invoice.remainingAmount === 0 ? "PAID"
+//         : totalPaid > 0 ? "PARTIAL"
+//           : "PENDING";
+
+//     await invoice.save({ session });
+
+//     // ── Step 5: NAYI (sahi) entry post karo — full new amount pe ──
+//     await postPaymentJournal({
+//       amount: newAmount,
+//       method: newMethod,
+//       paymentId: payment._id,
+//       userId: req.user._id,
+//       description: `Corrected payment — ${installment.label} (${invoice.invoiceNumber}): ${reason}`,
+//       date: newPaidDate,
+//       session,
+//     });
+
+//     await logAudit({
+//       req,
+//       action: "PAYMENT_CORRECTED",
+//       module: "finance",
+//       targetId: invoice._id,
+//       before: { invoice: before, payment: beforePayment },
+//       after: { invoice: invoice.toObject(), payment: payment.toObject(), oldAmount, newAmount, reason },
+//     });
+
+//     await session.commitTransaction();
+
+//     return res.json({
+//       success: true,
+//       message: `Payment corrected — Rs ${oldAmount} reversed, Rs ${newAmount} reposted with accurate date`,
+//       data: invoice,
+//     });
+//   } catch (err) {
+//     await session.abortTransaction();
+//     console.error("editPaidInstallment error:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   } finally {
+//     session.endSession();
+//   }
+// };
+
+// ── EDIT A PAID INSTALLMENT (amount/date correction after payment) ──
 exports.editPaidInstallment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { invoiceId, installmentId } = req.params;
-    const { amount, paidDate, method, referenceNumber, notes, reason } = req.body;
+    const { amount, paidDate, method, referenceNumber, notes, reason, adjustTotal } = req.body;
 
     if (!reason) {
       await session.abortTransaction();
@@ -1227,11 +1368,34 @@ exports.editPaidInstallment = async (req, res) => {
 
     const before = invoice.toObject();
     const beforePayment = payment.toObject();
-    const oldAmount = installment.amount;
-    // const newAmount = amount !== undefined ? Number(amount) : oldAmount;
-    // const diff = newAmount - oldAmount;
 
-    // ── Step 1: PURANI entry (50,000 wali) ko reverse karo — YE MISSING THA ──
+    // ── Sab naye values ek jagah, reversal se pehle hi declare kar do ──
+    const oldAmount = installment.amount;
+    const newAmount = amount !== undefined ? Number(amount) : oldAmount;
+    const diff = newAmount - oldAmount;
+    const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
+    const newMethod = method || installment.method;
+    const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
+
+    const isExtraFee = installment.feeType === "certificate" || installment.feeType === "manual";
+    const shouldAdjustTotal = !!adjustTotal; // ✅ default false — Scenario B (payment-correction)
+
+    // ── Scenario A: Fee khud reassess hui — invoice.totalAmount bhi adjust karo ──
+    if (shouldAdjustTotal && isExtraFee && diff !== 0) {
+      invoice.totalAmount = Math.max(0, invoice.totalAmount + diff);
+
+      await postInvoiceJournal({
+        amount: diff, // postInvoiceJournal ab negative diff bhi safely handle karta hai
+        invoiceId: invoice._id,
+        userId: req.user._id,
+        description: `${installment.label} — fee reassessed, adjusting AR/Income by ${diff > 0 ? "+" : ""}${diff} (${invoice.invoiceNumber}): ${reason}`,
+        date: newPaidDate,
+        session,
+      });
+    }
+    // ── Scenario B (default): Sirf collection/receipt galat thi — totalAmount untouched ──
+
+    // ── Step 1: Purani payment journal entry reverse karo ──
     const reversed = await reverseJournalEntry({
       sourceType: "payment",
       sourceRef: payment._id,
@@ -1248,13 +1412,7 @@ exports.editPaidInstallment = async (req, res) => {
       });
     }
 
-    // ── Step 2: Naye correct values determine karo ──
-    const newAmount = amount !== undefined ? Number(amount) : oldAmount;
-    const newPaidDate = paidDate ? new Date(paidDate) : installment.paidAt;
-    const newMethod = method || installment.method;
-    const newRef = referenceNumber !== undefined ? referenceNumber : installment.referenceNumber;
-
-    // ── Step 3: Payment + installment record update karo ──
+    // ── Step 2: Payment + installment record update karo ──
     payment.amount = newAmount;
     payment.method = newMethod;
     payment.referenceNumber = newRef;
@@ -1268,9 +1426,7 @@ exports.editPaidInstallment = async (req, res) => {
     installment.referenceNumber = newRef;
     installment.paidAt = newPaidDate;
 
-    invoice.totalAmount = Math.max(0, invoice.totalAmount + diff);
-
-    // ── Step 4: Invoice totals recalculate karo ──
+    // ── Step 3: Invoice totals recalculate karo ──
     const totalPaid = invoice.installments.reduce(
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
     );
@@ -1283,7 +1439,7 @@ exports.editPaidInstallment = async (req, res) => {
 
     await invoice.save({ session });
 
-    // ── Step 5: NAYI (sahi) entry post karo — full new amount pe ──
+    // ── Step 4: Nayi (sahi) payment entry post karo — full new amount pe ──
     await postPaymentJournal({
       amount: newAmount,
       method: newMethod,
@@ -1300,7 +1456,14 @@ exports.editPaidInstallment = async (req, res) => {
       module: "finance",
       targetId: invoice._id,
       before: { invoice: before, payment: beforePayment },
-      after: { invoice: invoice.toObject(), payment: payment.toObject(), oldAmount, newAmount, reason },
+      after: {
+        invoice: invoice.toObject(),
+        payment: payment.toObject(),
+        oldAmount,
+        newAmount,
+        adjustedTotal: shouldAdjustTotal,
+        reason,
+      },
     });
 
     await session.commitTransaction();
@@ -1325,8 +1488,7 @@ exports.voidInstallmentPayment = async (req, res) => {
 
   try {
     const { invoiceId, installmentId } = req.params;
-    const { reason } = req.body;
-    // const { reason, voidReason } = req.body;
+    const { reason, voidReason } = req.body;
 
     const invoice = await Invoice.findById(invoiceId).session(session);
     if (!invoice)
@@ -1356,7 +1518,7 @@ exports.voidInstallmentPayment = async (req, res) => {
     payment.status = "voided";
     payment.voidedBy = req.user._id;
     payment.voidedAt = new Date();
-    // payment.voidReason = voidReason || "other";
+    payment.voidReason = voidReason || "other";
     payment.notes = `${payment.notes || ""} [VOIDED: ${reason || "no reason"}]`;
     await payment.save({ session });
 
