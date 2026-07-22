@@ -37,7 +37,9 @@ const {
   exportReceivingExcel,
   sendReceivingReportEmail,
   voidInstallmentPayment,
-  deleteInvoice
+  deleteInvoice,
+  checkInvoiceNumber,
+  generateInvoiceNumber
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
@@ -69,6 +71,10 @@ router.get(
   authorize("sales_manager", "sales_rep"),
   getSalesRoleInvoices
 );
+
+router.get("/invoices/check-number", protect, authorize("user", "finance_manager", "admin", "super_admin"), checkInvoiceNumber);
+router.get("/invoices/generate-number", protect, authorize("user", "finance_manager", "admin", "super_admin"), generateInvoiceNumber);
+
 
 router.get("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), getInvoiceById);
 router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), updateInvoice);
@@ -134,6 +140,7 @@ router.post("/extension", protect, authorize("finance_manager", "admin", "super_
 router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "super_admin"), getRevenueReport);
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
+
 
 module.exports = router;
 

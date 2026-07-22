@@ -21,6 +21,7 @@ const {
   markInterested,
   updatePaymentPlan,
   submitContract,
+  sendPaymentPlanInvoice
 } = require("../controllers/leadController.js");
 
 const { protect } = require("../middlewares/authMiddleware.js");
@@ -40,7 +41,7 @@ router.post("/program", createProgramLead);
 router.get("/stats", protect, authorize("super_admin", "admin", "sales_manager"), getLeadsStats);
 
 // ✅ Get My Contract 
-router.get("/my-contract", protect, getMyContract); 
+router.get("/my-contract", protect, getMyContract);
 
 // Admin/Sales Manager contract edit kare
 router.patch("/:id/contract-edit", protect, authorize("super_admin", "admin", "sales_manager"), updateContract);
@@ -74,12 +75,18 @@ router.get("/:id/activities", protect, authorize("super_admin", "admin", "sales_
 router.post("/:id/activities", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), addActivity);
 
 // ✅ Add Interested
-router.patch("/:id/interested",  protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), markInterested);
+router.patch("/:id/interested", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep"), markInterested);
 
 // ✅ Update Payment Plan
-router.patch("/:id/payment-plan", protect, authorize("admin","super_admin","finance_manager", "sales_manager"), updatePaymentPlan);
+router.patch("/:id/payment-plan", protect, authorize("admin", "super_admin", "finance_manager", "sales_manager"), updatePaymentPlan);
 
 // ✅ Submit Contract
-router.patch("/:id/contract",  protect,  submitContract); // user khud call karega
+router.patch("/:id/contract", protect, submitContract); // user khud call karega
+
+router.post(
+  "/:id/send-payment-plan-email",
+  protect,
+  authorize("admin", "super_admin", "finance_manager", "sales_manager"), sendPaymentPlanInvoice
+);
 
 module.exports = router;

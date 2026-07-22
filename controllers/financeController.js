@@ -132,6 +132,9 @@ exports.createInvoice = async (req, res) => {
       }
     }
 
+    // createInvoice ke andar, "exists" check already hai — bas isko duplicate-message clearer bana do
+    
+
     const invoiceDate = issueDate ? new Date(issueDate) : new Date();
 
     const invoice = await Invoice.create({
@@ -3391,3 +3394,124 @@ exports.searchEnrollments = async (req, res) => {
   }
 };
 
+// // ── CHECK invoice number uniqueness ──────────────────────────────
+// exports.checkInvoiceNumber = async (req, res) => {
+//   try {
+//     const { invoiceNumber } = req.query;
+//     if (!invoiceNumber || !invoiceNumber.trim()) {
+//       return res.status(400).json({ success: false, message: "invoiceNumber required" });
+//     }
+
+//     const exists = await Invoice.findOne({
+//       invoiceNumber: invoiceNumber.trim(),
+//     }).select("_id");
+
+//     res.json({ success: true, available: !exists });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+// // ── GENERATE next invoice number (starts after 2090) ─────────────
+// exports.generateInvoiceNumber = async (req, res) => {
+//   try {
+//     const STARTING_POINT = 2090; // ✅ ab se yahi baseline hai
+
+//     // Sirf purely-numeric invoiceNumbers consider karo (legacy imports)
+//     const invoices = await Invoice.find({
+//       invoiceNumber: { $regex: /^\d+$/ },
+//     }).select("invoiceNumber").lean();
+
+//     const maxExisting = invoices.reduce((max, inv) => {
+//       const num = parseInt(inv.invoiceNumber, 10);
+//       return num > max ? num : max;
+//     }, STARTING_POINT);
+
+//     const nextNumber = String(maxExisting + 1);
+
+//     // Race-condition safety — agar dusra request pehle le chuka ho to next try karo
+//     let candidate = nextNumber;
+//     let attempt = 0;
+//     while (await Invoice.findOne({ invoiceNumber: candidate }).select("_id")) {
+//       attempt += 1;
+//       candidate = String(maxExisting + 1 + attempt);
+//     }
+
+//     res.json({ success: true, invoiceNumber: candidate });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+// ── Helper: check invoiceNumber in BOTH Invoice collection AND Lead payment plans ──
+async function invoiceNumberExists(invoiceNumber) {
+  // 1) Check in Invoice collection
+  const invoiceExists = await Invoice.findOne({ invoiceNumber }).select("_id").lean();
+  if (invoiceExists) return true;
+
+  // 2) Check in Lead's paymentPlan (top-level field, not per-installment)
+  const leadExists = await Lead.findOne({
+    "paymentPlan.invoiceNumber": invoiceNumber,   // ✅ FIXED PATH
+  }).select("_id").lean();
+
+  return !!leadExists;
+}
+
+// ── CHECK invoice number uniqueness ──────────────────────────────
+exports.checkInvoiceNumber = async (req, res) => {
+  try {
+    const { invoiceNumber } = req.query;
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      return res.status(400).json({ success: false, message: "invoiceNumber required" });
+    }
+
+    const trimmed = invoiceNumber.trim();
+    const exists = await invoiceNumberExists(trimmed);
+
+    res.json({ success: true, available: !exists });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GENERATE next invoice number (starts after 2090) ─────────────
+exports.generateInvoiceNumber = async (req, res) => {
+  try {
+    const STARTING_POINT = 2090;
+
+    // Invoice collection se purely-numeric invoiceNumbers
+    const invoices = await Invoice.find({
+      invoiceNumber: { $regex: /^\d+$/ },
+    }).select("invoiceNumber").lean();
+
+    // ✅ FIXED — Lead.paymentPlan.invoiceNumber (top-level field) se numeric numbers
+    const leadsWithInvoices = await Lead.find({
+      "paymentPlan.invoiceNumber": { $regex: /^\d+$/ },
+    }).select("paymentPlan.invoiceNumber").lean();
+
+    let maxExisting = invoices.reduce((max, inv) => {
+      const num = parseInt(inv.invoiceNumber, 10);
+      return num > max ? num : max;
+    }, STARTING_POINT);
+
+    // ✅ Ab har lead ka ek hi paymentPlan.invoiceNumber hai — loop simple ho gaya
+    maxExisting = leadsWithInvoices.reduce((max, lead) => {
+      const num = parseInt(lead.paymentPlan?.invoiceNumber, 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, maxExisting);
+
+    const nextNumber = String(maxExisting + 1);
+
+    // Race-condition safety
+    let candidate = nextNumber;
+    let attempt = 0;
+    while (await invoiceNumberExists(candidate)) {
+      attempt += 1;
+      candidate = String(maxExisting + 1 + attempt);
+    }
+
+    res.json({ success: true, invoiceNumber: candidate });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

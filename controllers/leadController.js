@@ -14,6 +14,7 @@ const Batch = require("../models/batchModel");
 const Certificate = require("../models/certificateModel.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
+const sendPaymentPlanInvoiceEmail = require("../utils/sendPaymentPlanInvoiceEmail.js");
 
 
 // Turnstile token verify utility
@@ -2982,4 +2983,150 @@ exports.getLeadsStats = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
+};
+
+// ── Manually trigger payment-plan invoice email (button/API se) ──
+// exports.sendPaymentPlanInvoice = async (req, res) => {
+//   try {
+//     const { invoiceId } = req.params;
+
+//     const invoice = await Invoice.findById(invoiceId).populate("user", "_id");
+//     if (!invoice) {
+//       return res.status(404).json({ success: false, message: "Invoice not found" });
+//     }
+
+//     // Student khud apni invoice email trigger kar sake, baaki sirf staff
+//     if (req.user.role === "user" && invoice.user._id.toString() !== req.user._id.toString()) {
+//       return res.status(403).json({ success: false, message: "Not authorized" });
+//     }
+
+//     const sent = await sendPaymentPlanInvoiceEmail(invoiceId);
+
+//     if (!sent) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email nahi bhej saka — invoice ya student email missing hai",
+//       });
+//     }
+
+//     await logAudit({
+//       req,
+//       action: "PAYMENT_PLAN_INVOICE_EMAIL_SENT",
+//       module: "finance",
+//       targetId: invoice._id,
+//       after: { sentTo: invoice.user._id, sentAt: new Date() },
+//     });
+
+//     res.json({ success: true, message: "Invoice email successfully bhej diya gaya" });
+//   } catch (err) {
+//     console.error("sendPaymentPlanInvoice error:", err.message);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+exports.sendPaymentPlanInvoice = async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id).populate("program_id", "name");
+
+    if (!lead) {
+      return res.status(404).json({ success: false, message: "Lead not found" });
+    }
+
+    const plan = lead.paymentPlan;
+    if (!plan?.invoiceNumber || !plan?.issueDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Invoice number aur issue date pehle fill karein",
+      });
+    }
+
+    if (!lead.email) {
+      return res.status(400).json({ success: false, message: "Lead ka email missing hai" });
+    }
+
+    const formatDate = (d) =>
+      d ? new Date(d).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+    const formatAmount = (n) => Number(n || 0).toLocaleString("en-PK");
+
+    const installmentRows = (plan.installments || [])
+      .map((inst, i) => {
+        const isPaid = inst.status === "paid";
+        return `
+        <tr style="background:#ffffff; border-bottom:1px solid #dde2ec;">
+          <td style="padding:13px 16px; font-size:11px; color:#8a92a6;">${String(i + 1).padStart(2, "0")}</td>
+          <td style="padding:13px 16px; font-size:13px; color:#0f1117; font-weight:700;">${inst.label || `Installment ${i + 1}`}</td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">1</td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">—</td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">—</td>
+          <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">${formatDate(inst.dueDate)}</td>
+          <td style="padding:13px 16px;">
+            <span style="font-size:9.5px; font-weight:700; padding:3px 9px; border-radius:5px;
+              background:${isPaid ? "#eafaf3" : "#fff8e8"}; color:${isPaid ? "#1a8a57" : "#b07800"};">
+              ${isPaid ? "PAID" : "PENDING"}
+            </span>
+          </td>
+          <td style="padding:13px 16px; text-align:right; font-weight:600; font-size:13px;">
+            Rs ${formatAmount(inst.amount)}
+          </td>
+        </tr>`;
+      })
+      .join("");
+
+    const advanceRow = plan.advanceAmount
+      ? `
+      <tr style="background:#fdf6e3; border-bottom:1px solid #dde2ec;">
+        <td style="padding:13px 16px; font-size:11px; color:#8a92a6;">00</td>
+        <td style="padding:13px 16px; font-size:13px; color:#0f1117; font-weight:700;">
+          Advance Payment
+          <span style="background:#c8a84b; color:#5a3a00; font-size:9px; font-weight:700; padding:2px 8px; border-radius:4px; margin-left:7px;">Advance</span>
+        </td>
+        <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">1</td>
+        <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">—</td>
+        <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">—</td>
+        <td style="padding:13px 16px; font-size:11.5px; color:#4a5060;">${formatDate(plan.advanceDueDate)}</td>
+        <td style="padding:13px 16px;">
+          <span style="font-size:9.5px; font-weight:700; padding:3px 9px; border-radius:5px; background:#fff8e8; color:#b07800;">PENDING</span>
+        </td>
+        <td style="padding:13px 16px; text-align:right; font-weight:600; font-size:13px;">
+          Rs ${formatAmount(plan.advanceAmount)}
+        </td>
+      </tr>`
+      : "";
+
+    await sendEmailDynamic({
+      to: lead.email,
+      subject: `Invoice ${plan.invoiceNumber} | ALCO`,
+      templateName: "send-invoice",
+      replacements: {
+        invoiceNumber: plan.invoiceNumber,
+        invoiceStatus: "PENDING",
+        issueDate: formatDate(plan.issueDate),
+        advanceDueDate: formatDate(plan.advanceDueDate),
+        enrollmentId: "—",
+        studentName: `${lead.first_name} ${lead.last_name}`,
+        studentEmail: lead.email,
+        studentPhone: lead.phone || "—",
+        salesManagerName: lead.assigned_to?.name || "Finance Team",
+        salesManagerEmail: lead.assigned_to?.email || "finance@alco.com",
+        batchName: "—",
+        batchStartDate: "—",
+        batchEndDate: "—",
+        studentCnic: "—",
+        studentAddress: "—",
+        studentProfession: lead.profession || "—",
+        programName: lead.program_id?.name || "Program",
+        planNotes: plan.notes || "",
+        installmentRows: advanceRow + installmentRows,
+        totalAmount: formatAmount(plan.totalAmount),
+        paidAmount: formatAmount(0),
+        remainingAmount: formatAmount(plan.totalAmount),
+        advanceAmount: formatAmount(plan.advanceAmount || 0),
+      },
+    });
+
+    res.json({ success: true, message: "Invoice email successfully bhej diya gaya" });
+  } catch (err) {
+    console.error("sendPaymentPlanInvoice error:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
