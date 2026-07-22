@@ -820,14 +820,14 @@ exports.addInstallment = async (req, res) => {
     if (!label || amount === undefined)
       return res.status(400).json({ success: false, message: "label and amount are required" });
 
-    const invoice = await Invoice.findById(invoiceId);
+    // 👇 enrollment populate kiya taake fallback mein program mil sake
+    const invoice = await Invoice.findById(invoiceId).populate("enrollment"); // ya populate("enrollment", "program") agar sirf program chahiye
     if (!invoice)
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
     const before = invoice.toObject();
     const numAmount = Number(amount);
 
-    // ── Certificate/Manual fee = NAYA paisa, invoice ke original total mein shamil nahi tha ──
     const isExtraFee = feeType === "certificate" || feeType === "manual";
 
     invoice.installments.push({
@@ -841,10 +841,8 @@ exports.addInstallment = async (req, res) => {
     });
 
     if (isExtraFee) {
-      // ── Total amount badhao (ye extra fee hai, existing allocation ke andar nahi) ──
       invoice.totalAmount = (invoice.totalAmount || 0) + numAmount;
     } else {
-      // ── Normal installment — existing total ke andar hi allocate ho raha hai ──
       const totalInstallments = invoice.installments.reduce(
         (sum, i) => sum + (i.amount || 0),
         0
@@ -858,15 +856,18 @@ exports.addInstallment = async (req, res) => {
       }
     }
 
-    // ✅ remaining update — dono cases mein sahi rahega
     invoice.remainingAmount = Math.max(
       0,
       invoice.totalAmount - (invoice.paidAmount || 0)
     );
 
+    invoice.status =
+      invoice.remainingAmount === 0 ? "PAID"
+        : (invoice.paidAmount || 0) > 0 ? "PARTIAL"
+          : "PENDING";
+
     await invoice.save();
 
-    // ── Extra fee add hui to journal mein bhi reflect karo (Receivable/Income badha) ──
     if (isExtraFee) {
       try {
         await postInvoiceJournal({
@@ -880,14 +881,21 @@ exports.addInstallment = async (req, res) => {
       }
     }
 
-    // ── Certificate fee ke liye Certificate record bhi banao (agar single invoice mein direct add ho rahi hai) ──
     if (feeType === "certificate") {
-      const already = await Certificate.findOne({ enrollment: invoice.enrollment });
+      const already = await Certificate.findOne({ enrollment: invoice.enrollment?._id || invoice.enrollment });
       if (!already) {
+        // items[0].program already ObjectId string hota hai (jaise aapke data mein "69d88bcd3b3f401bb2e711bc")
+        // enrollment.program ek populated object hai, isliye ._id nikalna zaroori hai
+        const resolvedProgram =
+          invoice.items?.[0]?.program ||
+          invoice.enrollment?.program?._id ||
+          invoice.enrollment?.program || // agar kabhi already ObjectId ho to yehi fallback ban jayega
+          undefined;
+
         await Certificate.create({
-          user: invoice.user,
-          enrollment: invoice.enrollment,
-          program: invoice.items?.[0]?.program || undefined,
+          user: invoice.user?._id || invoice.user,
+          enrollment: invoice.enrollment?._id || invoice.enrollment,
+          program: resolvedProgram,
           certificateFee: numAmount,
           feePaid: false,
           status: "locked",
