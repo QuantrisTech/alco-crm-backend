@@ -14,7 +14,7 @@ router.get("/users", protect, authorize("admin", "super_admin", "sales_manager",
 router.get("/assign-role-users", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager", "email_marketing"), getAllAssignRole);
 router.get("/users/recipients", protect, authorize("admin", "super_admin", "finance_manager"), getAdminRecipients);
 router.get("/users/:id", protect, authorize("admin", "super_admin"), getUserById);
-router.patch("/users/:id", protect, authorize("admin", "super_admin"), updateUser);
+router.patch("/users/:id", protect, authorize("admin", "super_admin", "finance_manager"), updateUser);
 router.patch("/users/:id/change-password", protect, authorize("admin", "super_admin"), changeUserPassword);
 router.delete("/users/:id", protect, authorize("admin", "super_admin"), deleteUserById);
 router.delete("/users", protect, authorize("admin", "super_admin"), deleteAllUsers);
