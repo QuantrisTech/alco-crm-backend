@@ -86,12 +86,12 @@ exports.getProfitLoss = async (req, res) => {
       {
         $match: {
           status: "approved",
-          createdAt: { $gte: from, $lte: to },
+          paidAt: { $gte: from, $lte: to },
         },
       },
       {
         $group: {
-          _id:            { month: { $month: "$createdAt" } },
+          _id: { month: { $month: "$paidAt" } },
           totalCollected: { $sum: "$amount" },
         },
       },
@@ -322,7 +322,7 @@ exports.getCashFlowReport = async (req, res) => {
       {
         $match: {
           status: "approved",
-          createdAt: { $gte: from, $lte: to },
+          paidAt: { $gte: from, $lte: to },
         },
       },
       {
@@ -358,8 +358,8 @@ exports.getCashFlowReport = async (req, res) => {
 
     // ── Monthly cash flow for chart ───────────────────────────
     const monthlyIn = await Payment.aggregate([
-      { $match: { status: "approved", createdAt: { $gte: from, $lte: to } } },
-      { $group: { _id: { month: { $month: "$createdAt" } }, total: { $sum: "$amount" } } },
+      { $match: { status: "approved", paidAt: { $gte: from, $lte: to } } },
+      { $group: { _id: { month: { $month: "$paidAt" } }, total: { $sum: "$amount" } } },
       { $sort: { "_id.month": 1 } },
     ]);
 
@@ -436,7 +436,7 @@ exports.getRevenueByProgram = async (req, res) => {
       {
         $match: {
           status: "approved",
-          createdAt: { $gte: from, $lte: to },
+          paidAt: { $gte: from, $lte: to },
         },
       },
       {
@@ -456,7 +456,7 @@ exports.getRevenueByProgram = async (req, res) => {
           as:           "programData",
         },
       },
-      { $unwind: { path: "$programData", preserveNullAndEmpty: true } },
+      { $unwind: { path: "$programData", preserveNullAndEmptyArrays: true } },
       {
         $group: {
           _id:          "$programData._id",
