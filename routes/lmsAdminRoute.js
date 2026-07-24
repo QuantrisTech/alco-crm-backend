@@ -10,7 +10,9 @@ const {
   adminGetLiveSessions, adminCreateLiveSession, adminUpdateLiveSession, adminDeleteLiveSession,
   adminGetResources, adminCreateResource, adminUpdateResource, adminDeleteResource,
   adminGetResourceById, adminGetPublicResources, requestBook,
-  lmsGetResources, adminAddBook, getUserBooks
+  lmsGetResources, adminAddBook, getUserBooks,
+  toggleAudioAccess
+  // toggleLessonStatus
 } = require("../controllers/lmsAdminController");
 
 const isAdmin = authorize("admin", "super_admin");
@@ -24,6 +26,9 @@ router.get("/user-books/:userId",         protect, getUserBooks);
 router.get("/resources/public",          adminGetPublicResources);
 router.post("/resources/:id/request",    requestBook);
 
+// ─── Lessons ──────────────────────────────────────────────
+// router.patch("lessons/:id/toggle-status", protect, authorize("admin", "super_admin"), toggleLessonStatus);
+router.patch("/enrollments/:id/toggle-audio-access", protect, authorize("admin", "super_admin", "finance_manager"), toggleAudioAccess);
 // ─── Assignments ──────────────────────────────────────────────
 router.get("/assignments",           protect, isAdmin, adminGetAssignments);
 router.post("/assignments",          protect, isAdmin, adminCreateAssignment);

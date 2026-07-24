@@ -7,7 +7,7 @@ const Payment = require("../models/paymentModel.js");
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
   try {
-    const { user, program, batch, paymentPlan } = req.body; // Include paymentPlan
+    const { user, program, batch, paymentPlan, audioAccess  } = req.body; // Include paymentPlan
 
     if (!user || !program || !paymentPlan) {
       return res.status(400).json({
@@ -91,6 +91,7 @@ exports.createEnrollmentDirect = async (req, res) => {
       user,
       program,
       batch,
+      audioAccess: audioAccess ?? true,
       assigned_to: req.user._id,
       // paymentPlan, // Save payment plan details
       // status: "Pending" // Set initial status to Pending
@@ -159,11 +160,12 @@ exports.createEnrollmentDirectBundle = async (req, res) => {
     }
 
     const enrollments = [];
-    for (const { program, batch } of programBatches) {
+    for (const { program, batch, audioAccess } of programBatches) {  
       const enrollment = await Enrollment.create({
         user,
         program,
         batch: batch || undefined,
+        audioAccess: audioAccess ?? true,
         assigned_to: req.user._id,
       });
       enrollments.push(enrollment);

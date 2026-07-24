@@ -6,6 +6,7 @@ const Resource = require("../models/resourceModel");
 const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
 const BookRequest = require("../models/bookRequestModel.js");
+const Enrollment = require("../models/enrollmentModel");
 const sendEmail = require("../utils/sendEmailDynamic");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
@@ -589,6 +590,41 @@ exports.adminAddBook = async (req, res) => {
     await BookRequest.create({ user_id: userId, resource_id: resourceId });
 
     res.json({ success: true, message: "Book added successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// PATCH /admin/v1/lessons/:id/toggle-status
+// exports.toggleLessonStatus = async (req, res) => {
+//   try {
+//     const lesson = await Lesson.findById(req.params.id);
+//     if (!lesson) return res.status(404).json({ success: false, message: "Lesson not found" });
+
+//     // active <-> inactive toggle (draft ko touch nahi karta)
+//     lesson.status = lesson.status === "active" ? "inactive" : "active";
+//     await lesson.save();
+
+//     res.json({ success: true, data: lesson, message: `Lesson ${lesson.status === "active" ? "activated" : "deactivated"}` });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+// PATCH /admin/v1/enrollments/:id/toggle-audio-access
+exports.toggleAudioAccess = async (req, res) => {
+  try {
+    const enrollment = await Enrollment.findById(req.params.id);
+    if (!enrollment) return res.status(404).json({ success: false, message: "Enrollment not found" });
+
+    enrollment.audioAccess = !enrollment.audioAccess;
+    await enrollment.save();
+
+    res.json({
+      success: true,
+      data: enrollment,
+      message: `Audio access ${enrollment.audioAccess ? "granted" : "revoked"}`,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

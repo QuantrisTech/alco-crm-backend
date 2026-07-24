@@ -212,13 +212,18 @@ const enrollmentSchema = new mongoose.Schema(
       default: Date.now,
     },
 
+    audioAccess: {
+      type: Boolean,
+      default: true,   // Mongo me manually true rakhna, sab enrollments ke liye
+    },
+
     completedAt: Date,
 
     isGraduated: {
       type: Boolean,
       default: false,
     },
-    
+
     assigned_to: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

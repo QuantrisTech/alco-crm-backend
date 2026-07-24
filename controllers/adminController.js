@@ -3,6 +3,128 @@ const sendEmail = require("../utils/sendEmail.js");
 const User = require("../models/userModel.js");
 const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor");
+// controllers/adminController.js mein add karo
+const ExcelJS = require("exceljs");
+
+// ✅ EXCEL IMPORT — name, email, phone
+exports.bulkImportUsers = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Excel file required" });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+
+    const rows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // header skip
+
+      const name = row.getCell(1).text?.trim();
+      const email = row.getCell(2).text?.trim().toLowerCase();
+      const phone = row.getCell(3).text?.trim();
+
+      if (name && email) {
+        rows.push({ name, email, phone: phone || null });
+      }
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid rows found" });
+    }
+
+    // ✅ file ke andar hi duplicate emails remove (last occurrence rakho)
+    const uniqueMap = new Map();
+    rows.forEach((r) => uniqueMap.set(r.email, r));
+    const uniqueRows = Array.from(uniqueMap.values());
+
+    // ✅ DB mein already existing emails check
+    const emails = uniqueRows.map((r) => r.email);
+    const existingUsers = await User.find({ email: { $in: emails } }).select("email");
+    const existingEmails = new Set(existingUsers.map((u) => u.email));
+
+    const toInsert = uniqueRows.filter((r) => !existingEmails.has(r.email));
+    const skipped = uniqueRows.filter((r) => existingEmails.has(r.email));
+
+    const docs = toInsert.map((r) => ({
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      role: "user",
+      source: "enroll",
+      is_old_user: true,
+      needsAccountSetup: true,
+      isVerified: false,
+      isActive: true,
+      isPaid: false,
+      avatarColor: generateColor(r.email),
+    }));
+
+    const inserted = docs.length > 0 ? await User.insertMany(docs, { ordered: false }) : [];
+
+    res.status(200).json({
+      success: true,
+      totalRows: rows.length,
+      importedCount: inserted.length,
+      skippedCount: skipped.length,
+      skippedEmails: skipped.map((s) => s.email),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ JSON BULK IMPORT — old users (aapke sample structure ke liye)
+// exports.bulkImportOldUsers = async (req, res) => {
+//   try {
+//     const { users } = req.body; // array of objects
+
+//     if (!Array.isArray(users) || users.length === 0) {
+//       return res.status(400).json({ success: false, message: "users array required" });
+//     }
+
+//     // ✅ schema fields tak restrict — extra keys (country, notes waghera) drop
+//     const cleaned = users
+//       .filter((u) => u.name && u.email)
+//       .map((u) => ({
+//         name: u.name,
+//         email: String(u.email).trim().toLowerCase(),
+//         phone: u.phone || null,
+//         source: u.source || "enroll",
+//         role: u.role || "user",
+//         is_old_user: true,
+//         needsAccountSetup: true,
+//         isVerified: false,
+//         isActive: u.isActive ?? true,
+//         isPaid: u.isPaid ?? false,
+//         avatarColor: generateColor(u.email),
+//       }));
+
+//     const uniqueMap = new Map();
+//     cleaned.forEach((r) => uniqueMap.set(r.email, r));
+//     const uniqueRows = Array.from(uniqueMap.values());
+
+//     const emails = uniqueRows.map((r) => r.email);
+//     const existingUsers = await User.find({ email: { $in: emails } }).select("email");
+//     const existingEmails = new Set(existingUsers.map((u) => u.email));
+
+//     const toInsert = uniqueRows.filter((r) => !existingEmails.has(r.email));
+//     const skipped = uniqueRows.filter((r) => existingEmails.has(r.email));
+
+//     const inserted = toInsert.length > 0 ? await User.insertMany(toInsert, { ordered: false }) : [];
+
+//     res.status(200).json({
+//       success: true,
+//       totalRows: users.length,
+//       importedCount: inserted.length,
+//       skippedCount: skipped.length,
+//       skippedEmails: skipped.map((s) => s.email),
+//     });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 
 // ✅ GET ALL USERS
 exports.getAllUsers = async (req, res) => {

@@ -148,6 +148,7 @@ exports.getLearningDashboard = async (req, res) => {
       success: true,
       data: {
         enrollment,
+        audio_access: enrollment.audioAccess,
         overall_progress: overallProgress,
         completed_lessons: completedTotal,
         total_lessons: totalLessons,
@@ -194,7 +195,7 @@ exports.getCourseContent = async (req, res) => {
       })
     );
 
-    res.json({ success: true, data: { course, modules: modulesWithLessons } });
+    res.json({ success: true, data: { course, modules: modulesWithLessons, audio_access: enrollment.audioAccess } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -209,13 +210,11 @@ exports.getLessonContent = async (req, res) => {
     const lesson = await Lesson.findOne({ _id: req.params.lessonId, program_id: enrollment.program, status: "active" });
     if (!lesson) return res.status(404).json({ success: false, message: "Lesson not found" });
 
-    // Progress record
     const progress = await LessonProgress.findOne({
       enrollment_id: enrollment._id,
       lesson_id: lesson._id,
     });
 
-    // Next / Prev lesson
     const nextLesson = await Lesson.findOne({
       module_id: lesson.module_id,
       order: { $gt: lesson.order },
@@ -228,9 +227,21 @@ exports.getLessonContent = async (req, res) => {
       status: "active",
     }).select("_id title order").sort({ order: -1 });
 
+    // ── Audio access check — content_url strip karo agar access nahi ──
+    const lessonObj = lesson.toObject();
+    if (!enrollment.audioAccess) {
+      lessonObj.content_url = null;
+    }
+
     res.json({
       success: true,
-      data: { lesson, progress, next_lesson: nextLesson, prev_lesson: prevLesson },
+      data: {
+        lesson: lessonObj,
+        progress,
+        next_lesson: nextLesson,
+        prev_lesson: prevLesson,
+        audio_access: enrollment.audioAccess,   // ← NAYA
+      },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -247,6 +258,9 @@ exports.updateLessonProgress = async (req, res) => {
     const enrollment = await verifyEnrollment(req.params.enrollmentId, req.user.id);
     if (!enrollment) return res.status(403).json({ success: false, message: "Access denied" });
 
+    if (!enrollment.audioAccess) {
+      return res.status(403).json({ success: false, message: "Audio access restricted for this enrollment" });
+    }
     const lesson = await Lesson.findById(req.params.lessonId);
     if (!lesson) return res.status(404).json({ success: false, message: "Lesson not found" });
 
@@ -637,3 +651,4 @@ exports.getMyBooks = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
