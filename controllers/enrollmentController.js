@@ -2,7 +2,9 @@
 const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
 const Batch = require("../models/batchModel");
-const Payment = require("../models/paymentModel.js");
+const Payment = require("../models/paymentModel.js"); 
+const ExcelJS = require("exceljs");
+const User = require("../models/userModel.js");
 
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
@@ -68,7 +70,7 @@ exports.createEnrollmentDirect = async (req, res) => {
     //     message: "User, Program, and Payment Plan are required",
     //   });
     // }
-    const { user, program, batch } = req.body; // Include paymentPlan
+    const { user, program, batch, audioAccess } = req.body; // Include paymentPlan
 
     if (!user || !program) {
       return res.status(400).json({
@@ -733,4 +735,150 @@ exports.assignEnrollment = async (req, res) => {
     success: true,
     data: enrollment,
   });
+};
+
+
+// ─────────────────────────────────────────────────────────
+// STEP 1: PREVIEW — Excel parse + user match + duplicate check
+// ─────────────────────────────────────────────────────────
+exports.previewBulkEnrollment = async (req, res) => {
+  try {
+    const { program, batch } = req.body;
+ 
+    if (!program) {
+      return res.status(400).json({ success: false, message: "Program is required" });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Excel file is required" });
+    }
+ 
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+ 
+    // ✅ Column B = Email (same file format jo users import mein use hoti hai: Name, Email, Phone)
+    const emails = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // header skip
+      const email = row.getCell(2).text?.trim().toLowerCase();
+      if (email) emails.push(email);
+    });
+ 
+    if (emails.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid emails found in file" });
+    }
+ 
+    // ✅ file ke andar duplicate emails hata do
+    const uniqueEmails = [...new Set(emails)];
+ 
+    // ✅ DB mein users dhoondo
+    const users = await User.find({ email: { $in: uniqueEmails } }).select("name email phone");
+    const userMap = new Map(users.map((u) => [u.email, u]));
+ 
+    // ✅ In users ki is program mein existing enrollments check karo
+    const foundUserIds = users.map((u) => u._id);
+    const existingEnrollments = await Enrollment.find({
+      user: { $in: foundUserIds },
+      program,
+    }).select("user");
+    const enrolledUserIds = new Set(existingEnrollments.map((e) => e.user.toString()));
+ 
+    // ✅ Preview rows banao
+    const preview = uniqueEmails.map((email) => {
+      const user = userMap.get(email);
+ 
+      if (!user) {
+        return {
+          email,
+          user: null,
+          status: "not_found", // system mein user hi nahi
+        };
+      }
+ 
+      const isDuplicate = enrolledUserIds.has(user._id.toString());
+      return {
+        email,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+        },
+        status: isDuplicate ? "duplicate" : "eligible",
+      };
+    });
+ 
+    res.status(200).json({
+      success: true,
+      program,
+      batch: batch || null,
+      totalRows: uniqueEmails.length,
+      eligibleCount: preview.filter((p) => p.status === "eligible").length,
+      duplicateCount: preview.filter((p) => p.status === "duplicate").length,
+      notFoundCount: preview.filter((p) => p.status === "not_found").length,
+      preview,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+ 
+// ─────────────────────────────────────────────────────────
+// STEP 2: CONFIRM — actual enrollment creation (single row ya bulk, same endpoint)
+// ─────────────────────────────────────────────────────────
+exports.bulkConfirmEnrollment = async (req, res) => {
+  try {
+    const { enrollments } = req.body;
+    // enrollments: [{ user, program, batch, assigned_to, audioAccess }]
+ 
+    if (!Array.isArray(enrollments) || enrollments.length === 0) {
+      return res.status(400).json({ success: false, message: "enrollments array is required" });
+    }
+ 
+    const created = [];
+    const skipped = [];
+ 
+    for (const item of enrollments) {
+      const { user, program, batch, assigned_to, audioAccess } = item;
+ 
+      if (!user || !program) {
+        skipped.push({ user, program, reason: "Missing user or program" });
+        continue;
+      }
+ 
+      // ✅ Race-condition safe duplicate check (bulk ke doraan bhi)
+      const exists = await Enrollment.findOne({ user, program });
+      if (exists) {
+        skipped.push({ user, program, reason: "Already enrolled" });
+        continue;
+      }
+ 
+      const enrollment = await Enrollment.create({
+        user,
+        program,
+        batch: batch || undefined,
+        audioAccess: audioAccess ?? true,
+        assigned_to: assigned_to || req.user._id,
+      });
+ 
+      if (batch) {
+        await Batch.findOneAndUpdate(
+          { _id: batch, students: { $ne: user } },
+          { $addToSet: { students: user }, $inc: { current_students: 1 } }
+        );
+      }
+ 
+      created.push(enrollment);
+    }
+ 
+    res.status(201).json({
+      success: true,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };

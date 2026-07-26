@@ -15,10 +15,14 @@ const {
   suspendEnrollment,
   reactivateEnrollment,
   assignEnrollment,
+  previewBulkEnrollment,
+  bulkConfirmEnrollment
 } = require("../controllers/enrollmentController");
 
 const { protect } = require("../middlewares/authMiddleware");
 const { authorize } = require("../middlewares/roleMiddleware");
+const { uploadExcel } = require("../middlewares/uploadExcel.js");
+
 
 // STUDENT
 router.get("/my", protect, getMyEnrollments);
@@ -45,5 +49,20 @@ router.post("/:id/suspend", protect, authorize("admin", "super_admin"), suspendE
 router.post("/:id/reactivate", protect, authorize("admin", "super_admin"), reactivateEnrollment);
 
 router.patch("/:id/assign", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), assignEnrollment);
+
+router.post(
+  "/bulk-import/preview",
+  protect,
+  authorize("admin", "super_admin", "sales_manager", "finance_manager"),
+  uploadExcel.single("file"),
+  previewBulkEnrollment
+);
+
+router.post(
+  "/bulk-import/confirm",
+  protect,
+  authorize("admin", "super_admin", "sales_manager", "finance_manager"),
+  bulkConfirmEnrollment
+);
 
 module.exports = router;
