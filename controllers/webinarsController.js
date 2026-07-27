@@ -91,11 +91,30 @@ exports.createWebinar = async (req, res) => {
   }
 };
 
+// controllers/webinarController.js
 exports.getAllWebinars = async (req, res) => {
-  const webinars = await Webinar.find().sort({ date: -1 });
-  res.json(webinars);
-};
+  const { page = 1, limit = 10, search = "", status = "" } = req.query;
 
+  const query = {};
+  if (search) query.title = { $regex: search, $options: "i" };
+  if (status) query.status = status;
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [webinars, total] = await Promise.all([
+    Webinar.find(query).sort({ date: -1 }).skip(skip).limit(Number(limit)),
+    Webinar.countDocuments(query),
+  ]);
+
+  res.json({
+    data: webinars,
+    meta: {
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+      total,
+    },
+  });
+};
 exports.getWebinarById = async (req, res) => {
   const webinar = await Webinar.findById(req.params.id);
   if (!webinar) return res.status(404).json({ message: 'Not found' });

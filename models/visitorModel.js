@@ -29,6 +29,11 @@ const visitorSchema = new mongoose.Schema(
       enum: ["visitor", "promoted"],
       default: "visitor",
     },
+    assigned_to: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     promoted_lead_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Lead",
