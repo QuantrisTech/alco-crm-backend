@@ -8,7 +8,7 @@ const AuditLog = require("../models/auditModel.js");
  * @param {Object} params
  * @param {Object} params.req         - Express request object (for user + IP)
  * @param {string} params.action      - e.g. "PAYMENT_APPROVED", "INVOICE_CREATED"
- * @param {string} params.module      - e.g. "finance_manager", "enrollment", "access"
+ * @param {string} params.module      - e.g. "finance", "enrollment", "access"
  * @param {string} params.targetId    - ID of the document being acted upon
  * @param {Object} params.before      - State before the action (optional)
  * @param {Object} params.after       - State after the action (optional)

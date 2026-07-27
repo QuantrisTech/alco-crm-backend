@@ -4,8 +4,6 @@ const router = express.Router();
 
 const {
   createEnrollment,
-  createEnrollmentDirect,
-  createEnrollmentDirectBundle,
   getMyEnrollments,
   getAllEnrollments,
   getEnrollmentById,
@@ -14,7 +12,6 @@ const {
   graduateEnrollment,
   suspendEnrollment,
   reactivateEnrollment,
-  assignEnrollment,
 } = require("../controllers/enrollmentController");
 
 const { protect } = require("../middlewares/authMiddleware");
@@ -26,11 +23,7 @@ router.get("/my", protect, getMyEnrollments);
 // ADMIN
 router.post("/", protect, authorize("admin", "super_admin"), createEnrollment);
 
-router.post("/direct", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirect);
-
-router.post("/direct/bundle", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirectBundle);
-
-router.get("/", protect, authorize("admin", "super_admin", "sales_rep", "sales_manager", "finance_manager"), getAllEnrollments);
+router.get("/", protect, authorize("admin", "super_admin"), getAllEnrollments);
 
 router.get("/:id", protect, getEnrollmentById);
 
@@ -43,7 +36,5 @@ router.post("/:id/graduate", protect, authorize("admin", "super_admin"), graduat
 router.post("/:id/suspend", protect, authorize("admin", "super_admin"), suspendEnrollment);
 
 router.post("/:id/reactivate", protect, authorize("admin", "super_admin"), reactivateEnrollment);
-
-router.patch("/:id/assign", protect, authorize("admin", "super_admin", "sales_manager"), assignEnrollment);
 
 module.exports = router;

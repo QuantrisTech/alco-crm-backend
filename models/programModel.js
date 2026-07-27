@@ -41,7 +41,7 @@ const programSchema = new mongoose.Schema(
         category: {
             type: String,
             enum: ["nlp", "icf", "hypnotherapy", "trainer"],
-            default: "nlp",
+            default: "nlp", 
         },
         status: {
             type: String,
@@ -57,10 +57,10 @@ const programSchema = new mongoose.Schema(
             ref: "User",
         },
         // Stats
-        // total_students: {
-        //     type: Number,
-        //     default: 0,
-        // },
+        total_students: {
+            type: Number,
+            default: 0,
+        },
         total_courses: {
             type: Number,
             default: 0,
@@ -68,18 +68,5 @@ const programSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
-
-// programSchema mein virtual add karo
-programSchema.virtual("total_students", {
-    ref: "Enrollment",
-    localField: "_id",
-    foreignField: "program",
-    count: true,
-    match: { status: { $in: ["active", "completed"] } },
-});
-
-// toJSON mein virtuals enable karo
-programSchema.set("toJSON", { virtuals: true });
-programSchema.set("toObject", { virtuals: true });
 
 module.exports = mongoose.model("Program", programSchema);

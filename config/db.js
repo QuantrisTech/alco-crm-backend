@@ -36,8 +36,7 @@ async function connectDB() {
   if (!cached.promise) {
     cached.promise = mongoose
       .connect(process.env.ATLAS_URL, {
-        serverSelectionTimeoutMS: 5000,
-        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 10000,
         // useNewUrlParser: true,
         // useUnifiedTopology: true,
       })

@@ -8,7 +8,6 @@ const {
   getProgramBySlug,
   getProgramCurriculum,
   getProgramBatches,
-  getProgramsPublic,
   // Admin — Programs
   adminGetPrograms,
   adminCreateProgram,
@@ -22,13 +21,11 @@ const {
   adminUpdateCourse,
   adminDeleteCourse,
   adminReorderCourses,
-  adminGetCourseById,
   // Admin — Modules
   adminGetModules,
   adminCreateModule,
   adminUpdateModule,
   adminDeleteModule,
-  adminGetModuleById,
   // Admin — Lessons
   adminGetLessons,
   adminCreateLesson,
@@ -48,18 +45,14 @@ router.get("/public", getPrograms);
 router.get("/public/:slug", getProgramBySlug);
 router.get("/public/:slug/curriculum", getProgramCurriculum);
 router.get("/public/:slug/batches", getProgramBatches);
-router.get("/name", getProgramsPublic);
 
-// ── FIRST ADMIN — Programs ──
+// ── ADMIN — Programs ──
 router.get("/", protect, authorize("admin", "super_admin"), adminGetPrograms);
 router.post("/", protect, authorize("admin", "super_admin"), adminCreateProgram);
+router.get("/:id", protect, authorize("admin", "super_admin"), adminGetProgramById);
+router.put("/:id", protect, authorize("admin", "super_admin"), adminUpdateProgram);
+router.delete("/:id", protect, authorize("admin", "super_admin"), adminDeleteProgram);
 router.post("/:id/duplicate", protect, authorize("admin", "super_admin"), adminDuplicateProgram);
-
-// ── ADMIN — Batches ──
-router.get("/batches", protect, authorize("admin", "super_admin"), adminGetBatches);
-router.post("/batches", protect, authorize("admin", "super_admin"), adminCreateBatch);
-router.put("/batches/:id", protect, authorize("admin", "super_admin"), adminUpdateBatch);
-router.delete("/batches/:id", protect, authorize("admin", "super_admin"), adminDeleteBatch);
 
 // ── ADMIN — Courses ──
 router.get("/:id/courses", protect, authorize("admin", "super_admin"), adminGetCourses);
@@ -67,14 +60,12 @@ router.post("/:id/courses", protect, authorize("admin", "super_admin"), adminCre
 router.put("/courses/reorder", protect, authorize("admin", "super_admin"), adminReorderCourses);
 router.put("/courses/:id", protect, authorize("admin", "super_admin"), adminUpdateCourse);
 router.delete("/courses/:id", protect, authorize("admin", "super_admin"), adminDeleteCourse);
-router.get("/courses/:id", protect, authorize("admin", "super_admin"), adminGetCourseById);
 
 // ── ADMIN — Modules ──
 router.get("/courses/:id/modules", protect, authorize("admin", "super_admin"), adminGetModules);
 router.post("/courses/:id/modules", protect, authorize("admin", "super_admin"), adminCreateModule);
 router.put("/modules/:id", protect, authorize("admin", "super_admin"), adminUpdateModule);
 router.delete("/modules/:id", protect, authorize("admin", "super_admin"), adminDeleteModule);
-router.get("/modules/:id", protect, authorize("admin", "super_admin"), adminGetModuleById);
 
 // ── ADMIN — Lessons ──
 router.get("/modules/:id/lessons", protect, authorize("admin", "super_admin"), adminGetLessons);
@@ -82,9 +73,10 @@ router.post("/modules/:id/lessons", protect, authorize("admin", "super_admin"), 
 router.put("/lessons/:id", protect, authorize("admin", "super_admin"), adminUpdateLesson);
 router.delete("/lessons/:id", protect, authorize("admin", "super_admin"), adminDeleteLesson);
 
-// ── LAST ADMIN — Programs ──
-router.get("/:id", protect, authorize("admin", "super_admin"), adminGetProgramById);
-router.put("/:id", protect, authorize("admin", "super_admin"), adminUpdateProgram);
-router.delete("/:id", protect, authorize("admin", "super_admin"), adminDeleteProgram);
+// ── ADMIN — Batches ──
+router.get("/batches", protect, authorize("admin", "super_admin"), adminGetBatches);
+router.post("/batches", protect, authorize("admin", "super_admin"), adminCreateBatch);
+router.put("/batches/:id", protect, authorize("admin", "super_admin"), adminUpdateBatch);
+router.delete("/batches/:id", protect, authorize("admin", "super_admin"), adminDeleteBatch);
 
 module.exports = router;

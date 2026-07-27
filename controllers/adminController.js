@@ -5,6 +5,33 @@ const sendEmailDynamic = require("../utils/sendEmailDynamic.js");
 const generateColor = require("../utils/generateColor");
 
 // ✅ GET ALL USERS
+// without search, pagination and role
+// exports.getAllUsers = async (req, res) => {
+//   try {
+//     const requesterRole = req.user.role;
+
+//     let query = {};
+
+//     if (requesterRole === "admin") {
+//       // ✅ Admin ko sirf non-admin users dikhao
+//       query = {
+//         role: { $nin: ["super_admin", "admin"] },
+//       };
+//     }
+//     // super_admin ko sab dikhao — query empty rahegi
+
+//     const users = await User.find(query).select("-password");
+
+//     res.status(200).json({
+//       success: true,
+//       count: users.length,
+//       users,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.getAllUsers = async (req, res) => {
   try {
     const requesterRole = req.user.role;
@@ -27,33 +54,10 @@ exports.getAllUsers = async (req, res) => {
     }
 
     // 🔎 Search (name/email)
-    // if (search) {
-    //   query.$or = [
-    //     { name: { $regex: search, $options: "i" } },
-    //     { email: { $regex: search, $options: "i" } },
-    //   ];
-    // }
     if (search) {
-      const searchRegex = new RegExp(search, "i");
-
-      const matchingUsers = await User.find({ name: searchRegex }).select("_id");
-      const matchingUserIds = matchingUsers.map((u) => u._id);
-
       query.$or = [
-        { first_name: searchRegex },
-        { last_name: searchRegex },
-        { email: searchRegex },
-        { phone: searchRegex },
-        ...(matchingUserIds.length > 0 ? [{ assigned_to: { $in: matchingUserIds } }] : []),
-        {
-          $expr: {
-            $regexMatch: {
-              input: { $concat: ["$first_name", " ", { $ifNull: ["$last_name", ""] }] },
-              regex: search,
-              options: "i",
-            },
-          },
-        },
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -258,6 +262,51 @@ exports.deleteAllUsers = async (req, res) => {
 };
 
 // ✅ CREATE USER (ADMIN)
+// exports.createUser = async (req, res) => {
+//   try {
+//     const { name, email, password, role } = req.body;
+
+//     // ✅ Duplicate check
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(400).json({ message: "User already exists" });
+//     }
+
+//     // ✅ Role validation — YAHAN ADD KARO
+//     const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "finance_manager", "user"];
+//     if (role && !allowedRoles.includes(role)) {
+//       return res.status(400).json({ message: "Invalid role" });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     const avatarColor = generateColor(email);
+
+//     const user = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       role: role || "user",
+//       isVerified: true,
+//       avatarColor,
+//       isPlayable: false,
+//       isTemporaryPassword: true
+//     });
+
+//     res.status(201).json({
+//       success: true,
+//       message: "User created successfully",
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         role: user.role,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.createUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -269,7 +318,7 @@ exports.createUser = async (req, res) => {
     }
 
     // ✅ Role validation
-    const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "instructor", "finance_manager", "user"];
+    const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "finance_manager", "user"];
     if (role && !allowedRoles.includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
@@ -299,7 +348,66 @@ exports.createUser = async (req, res) => {
         UserPassword: password,  // Use the plain password here
         SupportEmail: "alco@support.com",
         YourCompanyName: "Al-and-co",
-        LoginLink: "https://app.arslanlarik.com/auth?email=" + email + "&password=" + password,
+        LoginLink: "https://alco-crm-frontend.vercel.app/login?email=" + email + "&password=" + password,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+exports.createUser = async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+
+    // ✅ Duplicate check
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    // ✅ Role validation
+    const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "finance_manager", "user"];
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const avatarColor = generateColor(email);
+
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: role || "user",
+      isVerified: true,
+      avatarColor,
+      isPlayable: false,
+      isTemporaryPassword: true
+    });
+
+    // Send email with user credentials after creation
+    await sendEmailDynamic({
+      to: email,
+      subject: "Your Account Credentials 🔑",
+      templateName: "send-user-credentials",
+      replacements: {
+        UserName: name,
+        UserEmail: email,
+        UserPassword: password,  // Use the plain password here
+        SupportEmail: "alco@support.com",
+        YourCompanyName: "Al-and-co",
+        LoginLink: "https://alco-crm-frontend.vercel.app/login?email=" + email + "&password=" + password,
       },
     });
 
@@ -426,18 +534,5 @@ exports.changeUserPassword = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-
-exports.getAdminRecipients = async (req, res) => {
-  try {
-    const admins = await User.find({ role: { $in: ["admin", "super_admin"] } })
-      .select("name email role")
-      .lean();
-
-    res.json({ success: true, data: admins });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
   }
 };

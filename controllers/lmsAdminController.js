@@ -12,6 +12,7 @@ const streamifier = require("streamifier");
 const bcrypt = require("bcryptjs");
 const generateColor = require("../utils/generateColor.js");
 const { notifyBookRequested } = require("../config/notificationService");
+const assignLeadManager = require("../utils/assignLeadManager.js");
 
 // ── Helper: Cloudinary upload ─────────────────────────────────
 const uploadToCloudinary = (buffer, options) => {
@@ -234,9 +235,20 @@ exports.adminUpdateResource = async (req, res) => {
     const resource = await Resource.findById(req.params.id);
     if (!resource) return res.status(404).json({ success: false, message: "Not found" });
 
-    const { title, description } = req.body;
-    if (title) resource.title = title;
-    if (description) resource.description = description;
+    const { title, description, is_available, is_public } = req.body;
+    //  const { title, description } = req.body;
+    //     if (title) resource.title = title;
+    //     if (description) resource.description = description;
+    if (title !== undefined) resource.title = title;
+    if (description !== undefined) resource.description = description;
+
+    if (is_available !== undefined) {
+      resource.is_available = is_available === "true";
+    }
+
+    if (is_public !== undefined) {
+      resource.is_public = is_public === "true";
+    }
 
     if (req.files?.pdf?.[0]) {
       const result = await uploadToCloudinary(req.files.pdf[0].buffer, {
@@ -429,7 +441,6 @@ exports.adminGetPublicResources = async (req, res) => {
 // };
 exports.requestBook = async (req, res) => {
   try {
-    // const resource = await Resource.findOne({ _id: req.params.id, is_public: true });
     const resource = await Resource.findById(req.params.id);
     if (!resource) return res.status(404).json({ success: false, message: "Book not found" });
 
@@ -438,8 +449,10 @@ exports.requestBook = async (req, res) => {
       return res.status(400).json({ success: false, message: "first_name, email, phone required" });
     }
 
+    const cleanEmail = email.toLowerCase().trim();
+
     // ── User find ya create karo ──────────────────────────────
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: cleanEmail });
     let isNewUser = false;
 
     if (!user) {
@@ -449,28 +462,47 @@ exports.requestBook = async (req, res) => {
 
       user = await User.create({
         name: `${first_name} ${last_name || ""}`.trim(),
-        email,
+        email: cleanEmail,
         phone,
         password: hashedPassword,
         role: "user",
         isVerified: true,
         isTemporaryPassword: true,
-        source: `resource`,
+        avatarColor: generateColor(cleanEmail),
+        source: "resource",
       });
 
-      // ── Credentials email ─────────────────────────────────
       await sendEmail({
         to: email,
         subject: "Your Account Credentials 🔑",
         templateName: "send-user-credentials",
         replacements: {
           UserName: first_name,
-          UserEmail: email,
+          UserEmail: cleanEmail,
           UserPassword: tempPassword,
           SupportEmail: "alco@support.com",
           YourCompanyName: "Al-and-co",
           LoginLink: `${process.env.LMS_URL}/auth`,
         },
+      });
+    }
+
+    // ── Lead create — sirf agar exist nahi karta (email based) ──
+    const existingLead = await Lead.findOne({ email: cleanEmail });
+
+    if (!existingLead) {
+      const assignedManager = await assignLeadManager();
+
+      await Lead.create({
+        first_name: first_name.trim(),
+        last_name: (last_name || "").trim(),
+        email: cleanEmail,
+        phone: phone || null,
+        source: "resource",
+        status: "new",
+        quality: "cold",
+        user_id: user._id,
+        assigned_to: assignedManager,
       });
     }
 

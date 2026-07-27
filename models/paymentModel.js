@@ -24,11 +24,9 @@ const paymentSchema = new mongoose.Schema(
     // Approval workflow
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected", "voided"],
+      enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-
-    paidAt: { type: Date, default: Date.now }, 
 
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
@@ -39,24 +37,18 @@ const paymentSchema = new mongoose.Schema(
 
     receivedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
-    receiptUrl: { type: String, default: null },
-    receiptPublicId: { type: String, default: null },
-
-    voidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, 
-    voidedAt: Date,
-
     notes: String,
   },
   { timestamps: true }
 );
 
 // Validate: bank/cheque must have referenceNumber
-// paymentSchema.pre("save", function (next) {
-//   if (["bank", "cheque"].includes(this.method) && !this.referenceNumber) {
-//     return next(new Error("Reference number is required for bank/cheque payments"));
-//   }
-//   next();
-// });
+paymentSchema.pre("save", function (next) {
+  if (["bank", "cheque"].includes(this.method) && !this.referenceNumber) {
+    return next(new Error("Reference number is required for bank/cheque payments"));
+  }
+  next();
+});
 
 module.exports = mongoose.model("Payment", paymentSchema);
 

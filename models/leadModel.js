@@ -14,19 +14,7 @@ const leadSchema = new mongoose.Schema(
       lowercase: true,
     },
 
-    // phone: String,
-
-    // phone: {
-    //   type: String,
-    //   unique: true,
-    //   sparse: true,  
-    //   default: null,
-    // },
-
-    phone: {
-      type: String,
-      default: null,
-    },
+    phone: String,
 
     // ✅ NEW FIELDS
     nationality: {
@@ -44,33 +32,14 @@ const leadSchema = new mongoose.Schema(
     program_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Program",
-      default: null,
     },
-
-    batch_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Batch",
-      default: null,
-    },
-
-    user_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-
     goals: [String],
     message: String,
     query: String,
 
-    opportunity_value: {
-      type: Number,
-      default: 0,
-    },
-
     status: {
       type: String,
-      enum: ["new", "contacted", "qualified", "interested", "converted", "lost"],
+      enum: ["new", "contacted", "qualified", "converted", "lost"],
       default: "new",
     },
 
@@ -82,8 +51,7 @@ const leadSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact", "webinar", "frontforce", "lms", "crm", "resource", "register", "chatbot", "other"],
-      default: "enroll"
+      enum: ["facebook", "google", "organic", "referral"],
     },
 
     assigned_to: {
@@ -92,7 +60,6 @@ const leadSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ✅ Sahi — activities array ke andar hona chahiye
     activities: [
       {
         activity_type: {
@@ -103,11 +70,6 @@ const leadSchema = new mongoose.Schema(
         description: String,
         call_duration_minutes: Number,
         call_outcome: String,
-        // ✅ New fields
-        email_subject: String,
-        meeting_link: String,
-        meeting_datetime: Date,
-        meeting_location: String,
         created_by: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
@@ -119,78 +81,9 @@ const leadSchema = new mongoose.Schema(
       },
     ],
 
-    paymentPlan: {
-      totalAmount: Number,
-      discount: { type: Number, default: 0 },
-      advanceAmount: Number,
-      advanceDueDate: Date,
-      installments: [
-        {
-          label: String,
-          amount: Number,
-          dueDate: Date,
-          status: {
-            type: String,
-            enum: ["pending", "paid"],
-            default: "pending"
-          }
-        }
-      ],
-      notes: String,
-      createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
-      },
-      createdAt: { type: Date, default: Date.now }
-    },
-
-    contractDetails: {
-      // Auto-fill fields (lead se)
-      fullName: String,
-      email: String,
-      phone: String,
-      programName: String,
-
-      // User khud bharega
-      fatherHusbandName: String,
-      cnic: String,
-      bankAccountNumber: String,
-      currentAddress: String,
-      emergencyContactName: String,
-      emergencyContactPhone: String,
-      occupation: String,
-
-      // Agreements (checkboxes)
-      participationAgreement: { type: Boolean, default: false },
-      photoVideoRelease: { type: Boolean, default: false },
-
-      // Signature
-      signatureType: { type: String, enum: ["draw", "type"], default: "draw" },
-      signatureData: String, // base64 (draw) ya text (type)
-
-      // Status
-      status: {
-        type: String,
-        enum: ["pending", "filled", "signed"],
-        default: "pending"
-      },
-      signedAt: Date,
-      submittedAt: Date,
-    },
-
-    invoiceNumber: {
-      type: String,
-      default: null,
-    },
-
     created_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-    },
-
-    advance_paid: {
-      type: Boolean,
-      default: false,
     },
 
     lost_reason: String,

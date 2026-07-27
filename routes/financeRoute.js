@@ -8,20 +8,13 @@ const {
   getAllInvoices,
   getInvoiceById,
   markInvoicePaid,
-  markInstallmentPaid,
-  updateInstallment,
-  addInstallment,
   updateInvoice,
-  sendInvoiceEmail,
-  // sendReceivingInvoiceEmail,
-  getSalesRoleInvoices,
   addPayment,
   getAllPayments,
   getPaymentById,
   approvePayment,
   rejectPayment,
   updatePayment,
-  getMyInvoices,
   getPendingPayments,
   getOverduePayments,
   getUpcomingDues,
@@ -29,74 +22,22 @@ const {
   getRevenueReport,
   getMonthlyCollections,
   getPendingReport,
-  searchEnrollments,
-  exportReceivingExcel,
-  sendReceivingReportEmail,
-  voidInstallmentPayment,
-  deleteInvoice
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
-const { uploadReceiptFile } = require("../middlewares/uploadReceipt.js");
-
-
-router.get("/enrollments/search", protect, authorize("super_admin", "admin", "finance_manager"), searchEnrollments);
+// const { isFinanceManager, isAdmin } = require("../middleware/roleMiddleware");
 
 // ─── INVOICE ROUTES ───────────────────────────────────────────
 router.post("/invoices", protect, authorize("finance_manager", "admin", "super_admin"), createInvoice);
 router.get("/invoices", protect, authorize("finance_manager", "admin", "super_admin"), getAllInvoices);
-router.get("/invoices/my", protect, getMyInvoices);
 router.get("/invoices/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingPayments);
 router.get("/invoices/overdue", protect, authorize("finance_manager", "admin", "super_admin"), getOverduePayments);
 router.get("/invoices/upcoming-dues", protect, authorize("finance_manager", "admin", "super_admin"), getUpcomingDues);
-router.get("/invoices/receiving/export-excel", exportReceivingExcel);
-router.post(
-  "/invoices/receiving/export-email",
-  protect,
-  authorize("admin", "super_admin", "finance_manager"),
-  sendReceivingReportEmail
-);
-
-router.get(
-  "/invoices/sales",
-  protect,
-  authorize("sales_manager", "sales_rep"),
-  getSalesRoleInvoices
-);
-
 router.get("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), getInvoiceById);
 router.patch("/invoices/:id", protect, authorize("finance_manager", "admin", "super_admin"), updateInvoice);
-router.patch(
-  "/invoices/:invoiceId/installments/:installmentId/void",
-  protect,
-  authorize("admin", "super_admin"),   // 👈 restrictTo → authorize
-  voidInstallmentPayment
-);
-router.delete(
-  "/invoices/:id",
-  protect,
-  authorize("admin", "super_admin"),   // 👈 yahan bhi authorize
-  deleteInvoice
-);
 router.patch("/invoices/:id/mark-paid", protect, authorize("finance_manager", "admin", "super_admin"), markInvoicePaid);
-router.patch("/invoices/:invoiceId/installments/:installmentId/mark-paid", protect, authorize("admin", "super_admin", "finance_manager"), uploadReceiptFile, markInstallmentPaid);
-// financeRoutes.js
-router.patch(
-  "/invoices/:invoiceId/installments/:installmentId",
-  protect, authorize("admin", "super_admin", "finance_manager"),
-  updateInstallment
-);
-
-router.post(
-  "/invoices/:invoiceId/installments",
-  protect, authorize("admin", "super_admin", "finance_manager"),
-  addInstallment
-);
-
-router.post("/invoices/:id/send-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendInvoiceEmail);
-// router.post("/invoices/:id/send-receiving-invoice", protect, authorize("user", "finance_manager", "admin", "super_admin"), sendReceivingInvoiceEmail);
 
 // ─── PAYMENT ROUTES ───────────────────────────────────────────
 router.post("/payments", protect, authorize("finance_manager", "admin", "super_admin"), addPayment);

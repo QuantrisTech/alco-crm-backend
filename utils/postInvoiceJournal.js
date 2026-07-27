@@ -157,171 +157,84 @@ const JournalEntry = require("../models/journalEntryModel.js");
 const Account = require("../models/accountModel.js");
 const generateUniqueNumber = require("./generateUniqueNumber.js");
 
-// exports.postPaymentJournal = async ({
-//   amount, method, paymentId, userId, description, session, date,
-// }) => {
-//   const debitCode = method === "cash" ? "1001" : "1002";
+// exports.postInvoiceJournal = async ({
 
-//   const debitAccount = await Account.findOne({ code: debitCode, isActive: true });
-//   const creditAccount = await Account.findOne({ code: "1100", isActive: true });
-
-//   if (!debitAccount || !creditAccount) {
-//     console.warn("postPaymentJournal: accounts not found — seed first");
-//     return null;
-//   }
-
-//   const entryDate = date || new Date(); // ✅ paidAt yahan aayega
-
-//   const entryData = {
-//     date: entryDate, // ✅ ab sirf ek hi 'date' key — override nahi hoga
-//     description: description || "Payment received",
-//     // date: new Date(),
-//     lines: [
-//       { account: debitAccount._id, type: "debit", amount, description: `Payment received via ${method}` },
-//       { account: creditAccount._id, type: "credit", amount, description: "Student receivable cleared" },
-//     ],
-//     sourceType: "payment",
-//     sourceRef: paymentId,
-//     entryType: "auto",
-//     status: "posted",
-//     createdBy: userId,
-//     entryNumber: generateUniqueNumber("JE"),
-//     // period: {
-//     //   month: new Date().getMonth() + 1,
-//     //   year: new Date().getFullYear(),
-//     // },
-//     period: {
-//       month: entryDate.getMonth() + 1, // ✅ period bhi paidAt se derive hoga
-//       year: entryDate.getFullYear(),
-//     },
-//   };
-
-//   const opts = session ? { session } : {};
-//   const entry = await JournalEntry.create([entryData], opts);
-
-//   debitAccount.currentBalance += amount;
-//   creditAccount.currentBalance -= amount;
-
-//   if (session) {
-//     await debitAccount.save({ session });
-//     await creditAccount.save({ session });
-//   } else {
-//     await debitAccount.save();
-//     await creditAccount.save();
-//   }
-
-//   return entry[0];
-// };
-
-exports.postPaymentJournal = async ({
-  amount,
-  method,
-  paymentId,
-  userId,
-  description,
-  session,
-  date,
+exports.postInvoiceJournal = async ({
+  amount, invoiceId, userId, description, session, date
 }) => {
-  console.log("========== POST PAYMENT JOURNAL ==========");
+  const receivableAccount = await Account.findOne({ code: "1100", isActive: true }).session(session);
+  const incomeAccount = await Account.findOne({ code: "4001", isActive: true }).session(session);
 
-  const debitCode = method === "cash" ? "1001" : "1002";
-
-  const debitAccount = await Account.findOne({
-    code: debitCode,
-    isActive: true,
-  }).session(session);
-
-  const creditAccount = await Account.findOne({
-    code: "1100",
-    isActive: true,
-  }).session(session);
-
-  if (!debitAccount || !creditAccount) {
-    console.warn("Accounts not found");
+  if (!receivableAccount || !incomeAccount) {
+    console.warn("postInvoiceJournal: accounts not found — seed first");
     return null;
   }
 
-  console.log("Debit Account:", {
-    code: debitAccount.code,
-    name: debitAccount.name,
-    type: debitAccount.type,
-    balance: debitAccount.currentBalance,
-  });
-
-  console.log("Credit Account:", {
-    code: creditAccount.code,
-    name: creditAccount.name,
-    type: creditAccount.type,
-    balance: creditAccount.currentBalance,
-  });
-
   const entryDate = date || new Date();
+  const isNegative = amount < 0;
+  const absAmount = Math.abs(amount);
+
+
+  if (absAmount === 0) return null;
 
   const entryData = {
+    description: description || "Invoice created",
     date: entryDate,
-    description: description || "Payment received",
-    lines: [
-      {
-        account: debitAccount._id,
-        type: "debit",
-        amount,
-        description: `Payment received via ${method}`,
-      },
-      {
-        account: creditAccount._id,
-        type: "credit",
-        amount,
-        description: "Student receivable cleared",
-      },
-    ],
-    sourceType: "payment",
-    sourceRef: paymentId,
+    lines: isNegative
+      ? [
+        { account: incomeAccount._id, type: "debit", amount: absAmount, description: "Tuition fee income decreased" },
+        { account: receivableAccount._id, type: "credit", amount: absAmount, description: "Student fee receivable decreased" },
+      ]
+      : [
+        { account: receivableAccount._id, type: "debit", amount: absAmount, description: "Student fee receivable" },
+        { account: incomeAccount._id, type: "credit", amount: absAmount, description: "Tuition fee income recognized" },
+      ],
+    sourceType: "invoice",
+    sourceRef: invoiceId,
     entryType: "auto",
     status: "posted",
     createdBy: userId,
     entryNumber: generateUniqueNumber("JE"),
-
     isReversal: false,
     originalJournal: null,
-
     period: {
       month: entryDate.getMonth() + 1,
       year: entryDate.getFullYear(),
     },
   };
 
-  console.log("Journal Entry:");
-  console.log(JSON.stringify(entryData, null, 2));
-
-  // ❌ TEMPORARY
   const opts = session ? { session } : {};
   const entry = await JournalEntry.create([entryData], opts);
 
-  console.log("Balance Changes:");
+  console.log("Journal Entry:");
+  console.log(JSON.stringify(entryData, null, 2));
 
-  console.log("Debit Before:", debitAccount.currentBalance);
-  debitAccount.currentBalance += amount;
-  console.log("Debit After :", debitAccount.currentBalance);
+  console.log("Receivable Before:", receivableAccount.currentBalance);
+  console.log("Income Before:", incomeAccount.currentBalance);
 
-  console.log("Credit Before:", creditAccount.currentBalance);
-  creditAccount.currentBalance -= amount;
-  console.log("Credit After :", creditAccount.currentBalance);
+  if (isNegative) {
+    receivableAccount.currentBalance -= absAmount;
+    incomeAccount.currentBalance -= absAmount;
+  } else {
+    receivableAccount.currentBalance += absAmount;
+    incomeAccount.currentBalance += absAmount;
+  }
+
+  console.log("Receivable After:", receivableAccount.currentBalance);
+  console.log("Income After:", incomeAccount.currentBalance);
 
   console.log("Skipping JournalEntry.create()");
-  console.log("Skipping debitAccount.save()");
-  console.log("Skipping creditAccount.save()");
-
-  console.log("========== END POST PAYMENT ==========");
-
-  if (session) {
-  await debitAccount.save({ session });
-  await creditAccount.save({ session });
-} else {
-  await debitAccount.save();
-  await creditAccount.save();
-}
-return entry[0];
+  console.log("Skipping Account.save()");
 
   // return null;
-};
 
+  if (session) {
+    await receivableAccount.save({ session });
+    await incomeAccount.save({ session });
+  } else {
+    await receivableAccount.save();
+    await incomeAccount.save();
+  }
+
+  return entry[0];
+};
