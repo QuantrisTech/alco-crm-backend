@@ -186,7 +186,7 @@ exports.createEnrollmentDirectBundle = async (req, res) => {
   }
 };
 
-// ALL ENROLLMENTS (ADMIN)
+
 // exports.getAllEnrollments = async (req, res) => {
 //   try {
 //     const page = Number(req.query.page) || 1;
