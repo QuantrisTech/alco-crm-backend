@@ -38,9 +38,14 @@ const {
   adminDeleteLesson,
   // Admin — Batches
   adminGetBatches,
+  adminGetBatchById,
   adminCreateBatch,
   adminUpdateBatch,
   adminDeleteBatch,
+  // Admin — Batch Student Management
+  adminAddStudentToBatch,
+  adminRemoveStudentFromBatch,
+  adminSwitchStudentBatch,
 } = require("../controllers/programController.js");
 
 // ── Multer Memory Storage ──
@@ -139,9 +144,15 @@ router.post("/:id/duplicate", protect, authorize("admin", "super_admin"), adminD
 
 // ── ADMIN — Batches ──
 router.get("/batches", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetBatches);
+router.get("/batches/:id", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetBatchById);
 router.post("/batches", protect, authorize("admin", "super_admin", "finance_manager"), adminCreateBatch);
 router.put("/batches/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminUpdateBatch);
 router.delete("/batches/:id", protect, authorize("admin", "super_admin", "finance_manager"), adminDeleteBatch);
+
+// ── ADMIN — Batch Student Management ──
+router.post("/batches/:id/students", protect, authorize("admin", "super_admin", "finance_manager"), adminAddStudentToBatch);
+router.delete("/batches/:id/students/:studentId", protect, authorize("admin", "super_admin", "finance_manager"), adminRemoveStudentFromBatch);
+router.post("/batches/:id/switch-student", protect, authorize("admin", "super_admin", "finance_manager"), adminSwitchStudentBatch);
 
 // ── ADMIN — Courses ──
 router.get("/:id/courses", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetCourses);

@@ -678,6 +678,153 @@ exports.adminUpdateBatch = async (req, res) => {
     }
 };
 
+// GET /admin/v1/batches/:id
+exports.adminGetBatchById = async (req, res) => {
+    try {
+        const batch = await Batch.findById(req.params.id)
+            .populate("program_id", "name slug")
+            .populate("instructor_id", "name email phone")
+            .populate("students", "name email phone avatarColor");
+
+        if (!batch) {
+            return res.status(404).json({ success: false, message: "Batch not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: batch,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /admin/v1/batches/:id/students — Add student to batch
+exports.adminAddStudentToBatch = async (req, res) => {
+    try {
+        const { studentId } = req.body;
+        if (!studentId) {
+            return res.status(400).json({ success: false, message: "studentId required" });
+        }
+
+        const batch = await Batch.findById(req.params.id);
+        if (!batch) {
+            return res.status(404).json({ success: false, message: "Batch not found" });
+        }
+
+        // Check duplicate
+        if (batch.students.includes(studentId)) {
+            return res.status(409).json({ success: false, message: "Student already in this batch" });
+        }
+
+        batch.students.push(studentId);
+        batch.current_students = batch.students.length;
+        await batch.save();
+
+        // Update enrollment batch field
+        const Enrollment = require("../models/enrollmentModel");
+        await Enrollment.findOneAndUpdate(
+            { user: studentId, program: batch.program_id },
+            { batch: batch._id },
+            { new: true }
+        );
+
+        const populatedBatch = await Batch.findById(batch._id)
+            .populate("program_id", "name slug")
+            .populate("instructor_id", "name email phone")
+            .populate("students", "name email phone avatarColor");
+
+        res.status(200).json({ success: true, data: populatedBatch });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// DELETE /admin/v1/batches/:id/students/:studentId — Remove student from batch
+exports.adminRemoveStudentFromBatch = async (req, res) => {
+    try {
+        const { studentId } = req.params;
+
+        const batch = await Batch.findById(req.params.id);
+        if (!batch) {
+            return res.status(404).json({ success: false, message: "Batch not found" });
+        }
+
+        batch.students = batch.students.filter((s) => s.toString() !== studentId);
+        batch.current_students = batch.students.length;
+        await batch.save();
+
+        // Enrollment ka batch null karo
+        const Enrollment = require("../models/enrollmentModel");
+        await Enrollment.findOneAndUpdate(
+            { user: studentId, batch: batch._id },
+            { $unset: { batch: "" } },
+            { new: true }
+        );
+
+        const populatedBatch = await Batch.findById(batch._id)
+            .populate("program_id", "name slug")
+            .populate("instructor_id", "name email phone")
+            .populate("students", "name email phone avatarColor");
+
+        res.status(200).json({ success: true, data: populatedBatch });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /admin/v1/batches/:id/switch-student — Switch student to another batch
+exports.adminSwitchStudentBatch = async (req, res) => {
+    try {
+        const { studentId, targetBatchId } = req.body;
+        if (!studentId || !targetBatchId) {
+            return res.status(400).json({ success: false, message: "studentId and targetBatchId required" });
+        }
+
+        // Target batch exists?
+        const targetBatch = await Batch.findById(targetBatchId);
+        if (!targetBatch) {
+            return res.status(404).json({ success: false, message: "Target batch not found" });
+        }
+
+        // Remove from current batch
+        const currentBatch = await Batch.findById(req.params.id);
+        if (currentBatch) {
+            currentBatch.students = currentBatch.students.filter((s) => s.toString() !== studentId);
+            currentBatch.current_students = currentBatch.students.length;
+            await currentBatch.save();
+        }
+
+        // Add to target batch
+        if (!targetBatch.students.includes(studentId)) {
+            targetBatch.students.push(studentId);
+            targetBatch.current_students = targetBatch.students.length;
+            await targetBatch.save();
+        }
+
+        // Update enrollment
+        const Enrollment = require("../models/enrollmentModel");
+        await Enrollment.findOneAndUpdate(
+            { user: studentId, program: targetBatch.program_id },
+            { batch: targetBatch._id },
+            { new: true }
+        );
+
+        const populatedBatch = await Batch.findById(targetBatch._id)
+            .populate("program_id", "name slug")
+            .populate("instructor_id", "name email phone")
+            .populate("students", "name email phone avatarColor");
+
+        res.status(200).json({
+            success: true,
+            message: "Student switched successfully",
+            data: populatedBatch,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // DELETE /admin/v1/batches/:id
 exports.adminDeleteBatch = async (req, res) => {
     try {

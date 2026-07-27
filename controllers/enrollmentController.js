@@ -780,8 +780,20 @@ exports.previewBulkEnrollment = async (req, res) => {
     const existingEnrollments = await Enrollment.find({
       user: { $in: foundUserIds },
       program,
-    }).select("user");
-    const enrolledUserIds = new Set(existingEnrollments.map((e) => e.user.toString()));
+    })
+      .select("user audioAccess assigned_to")
+      .populate("assigned_to", "name email");
+    // user._id (string) -> { enrollmentId, audioAccess, assignedTo }
+    const enrolledMap = new Map(
+      existingEnrollments.map((e) => [
+        e.user.toString(),
+        {
+          enrollmentId: e._id,
+          audioAccess: e.audioAccess,
+          assignedTo: e.assigned_to ? { _id: e.assigned_to._id, name: e.assigned_to.name } : null,
+        },
+      ])
+    );
  
     // ✅ Preview rows banao
     const preview = uniqueEmails.map((email) => {
@@ -795,7 +807,23 @@ exports.previewBulkEnrollment = async (req, res) => {
         };
       }
  
-      const isDuplicate = enrolledUserIds.has(user._id.toString());
+      const existing = enrolledMap.get(user._id.toString());
+      if (existing) {
+        return {
+          email,
+          user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+          },
+          status: "duplicate",
+          enrollmentId: existing.enrollmentId,
+          currentAudioAccess: existing.audioAccess,
+          currentAssignedTo: existing.assignedTo,
+        };
+      }
+ 
       return {
         email,
         user: {
@@ -804,7 +832,7 @@ exports.previewBulkEnrollment = async (req, res) => {
           email: user.email,
           phone: user.phone,
         },
-        status: isDuplicate ? "duplicate" : "eligible",
+        status: "eligible",
       };
     });
  
