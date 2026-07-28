@@ -3515,3 +3515,266 @@ exports.generateInvoiceNumber = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+// ─────────────────────────────────────────────────────────
+// STEP 1: PREVIEW — Excel parse + user match + ALL enrollments per user
+// ─────────────────────────────────────────────────────────
+exports.previewBulkInvoice = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Excel file is required" });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+
+    // ✅ Column A = Name, B = Email, C = Amount, D = Due Date (optional),
+    //    E = Issue Date (optional), F = Invoice Number (optional)
+    const parsedRows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // header skip
+      const email = row.getCell(2).text?.trim().toLowerCase();
+      const amountRaw = row.getCell(3).text?.trim();
+      const dueDateRaw = row.getCell(4).text?.trim();
+      const issueDateRaw = row.getCell(5).text?.trim();
+      const invoiceNumberRaw = row.getCell(6).text?.trim();
+
+      if (email && amountRaw) {
+        parsedRows.push({
+          email,
+          amount: Number(amountRaw),
+          dueDate: dueDateRaw ? new Date(dueDateRaw) : null,
+          // ✅ Agar Excel mein issue date di hai to wahi use hogi, warna aaj ki date default
+          issueDate: issueDateRaw ? new Date(issueDateRaw) : new Date(),
+          invoiceNumber: invoiceNumberRaw || null,
+        });
+      }
+    });
+
+    if (parsedRows.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid rows found (Email + Amount required)" });
+    }
+
+    // ✅ file ke andar duplicate emails hata do (last occurrence rakho)
+    const rowMap = new Map();
+    parsedRows.forEach((r) => rowMap.set(r.email, r));
+    const uniqueRows = Array.from(rowMap.values());
+
+    // ✅ DB mein users dhoondo
+    const emails = uniqueRows.map((r) => r.email);
+    const users = await User.find({ email: { $in: emails } }).select("name email phone");
+    const userMap = new Map(users.map((u) => [u.email, u]));
+
+    // ✅ In users ki SAARI enrollments dhoondo (bundle = multiple programs)
+    const foundUserIds = users.map((u) => u._id);
+    const allEnrollments = await Enrollment.find({ user: { $in: foundUserIds } })
+      .populate("program", "name")
+      .select("user program");
+
+    const enrollmentsByUser = new Map();
+    allEnrollments.forEach((e) => {
+      const uid = e.user.toString();
+      if (!enrollmentsByUser.has(uid)) enrollmentsByUser.set(uid, []);
+      enrollmentsByUser.get(uid).push(e);
+    });
+
+    // ✅ In enrollments mein se kaunsi already invoiced hain (non-cancelled)
+    const allEnrollmentIds = allEnrollments.map((e) => e._id);
+    const existingInvoices = await Invoice.find({
+      enrollment: { $in: allEnrollmentIds },
+      status: { $ne: "CANCELLED" },
+    }).select("enrollment invoiceNumber totalAmount status");
+    const invoicedEnrollmentMap = new Map(existingInvoices.map((inv) => [inv.enrollment.toString(), inv]));
+
+    // ✅ Agar Excel mein custom invoice numbers diye gaye hain, unki uniqueness bhi check karlo
+    const requestedInvoiceNumbers = uniqueRows
+      .map((r) => r.invoiceNumber)
+      .filter(Boolean);
+    const clashingInvoices = requestedInvoiceNumbers.length
+      ? await Invoice.find({ invoiceNumber: { $in: requestedInvoiceNumbers } }).select("invoiceNumber")
+      : [];
+    const clashingNumberSet = new Set(clashingInvoices.map((inv) => inv.invoiceNumber));
+
+    // ✅ Preview rows banao
+    const preview = uniqueRows.map((r) => {
+      const user = userMap.get(r.email);
+      if (!user) {
+        return { email: r.email, user: null, status: "not_found" };
+      }
+
+      const userInfo = { _id: user._id, name: user.name, email: user.email, phone: user.phone };
+      const userEnrollments = enrollmentsByUser.get(user._id.toString()) || [];
+
+      if (userEnrollments.length === 0) {
+        return { email: r.email, user: userInfo, status: "no_enrollment", enrollmentOptions: [] };
+      }
+
+      const enrollmentOptions = userEnrollments.map((e) => {
+        const existingInv = invoicedEnrollmentMap.get(e._id.toString());
+        return {
+          enrollmentId: e._id,
+          programName: e.program?.name || "—",
+          hasInvoice: !!existingInv,
+          existingInvoiceNumber: existingInv?.invoiceNumber || null,
+        };
+      });
+
+      if (!r.amount || isNaN(r.amount) || r.amount <= 0) {
+        return { email: r.email, user: userInfo, status: "invalid_amount", enrollmentOptions };
+      }
+
+      // ✅ Agar custom invoice number diya gaya hai aur wo already kisi aur invoice mein use ho chuka hai
+      if (r.invoiceNumber && clashingNumberSet.has(r.invoiceNumber)) {
+        return {
+          email: r.email,
+          user: userInfo,
+          status: "invalid_invoice_number",
+          enrollmentOptions,
+          requestedInvoiceNumber: r.invoiceNumber,
+        };
+      }
+
+      const availableOption = enrollmentOptions.find((o) => !o.hasInvoice);
+
+      if (!availableOption) {
+        return { email: r.email, user: userInfo, status: "duplicate", enrollmentOptions };
+      }
+
+      return {
+        email: r.email,
+        user: userInfo,
+        status: "eligible",
+        enrollmentOptions,
+        selectedEnrollmentId: availableOption.enrollmentId,
+        amount: r.amount,
+        dueDate: r.dueDate,
+        issueDate: r.issueDate,               // ✅ ab preview mein bhi bhej rahe hain
+        invoiceNumber: r.invoiceNumber || null, // ✅ custom number agar diya ho
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      totalRows: uniqueRows.length,
+      eligibleCount: preview.filter((p) => p.status === "eligible").length,
+      duplicateCount: preview.filter((p) => p.status === "duplicate").length,
+      noEnrollmentCount: preview.filter((p) => p.status === "no_enrollment").length,
+      notFoundCount: preview.filter((p) => p.status === "not_found").length,
+      invalidCount: preview.filter((p) => p.status === "invalid_amount" || p.status === "invalid_invoice_number").length,
+      preview,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────
+// STEP 2: CONFIRM — actual invoice creation (single row ya bulk, same endpoint)
+// ─────────────────────────────────────────────────────────
+exports.confirmBulkInvoice = async (req, res) => {
+  try {
+    const { invoices } = req.body;
+    // invoices: [{ user, enrollmentId, amount, dueDate, issueDate, invoiceNumber }]
+
+    if (!Array.isArray(invoices) || invoices.length === 0) {
+      return res.status(400).json({ success: false, message: "invoices array is required" });
+    }
+
+    // ── Invoice number baseline — bilkul same logic jo generateInvoiceNumber mein hai ──
+    const STARTING_POINT = 2090;
+    const existingNumeric = await Invoice.find({ invoiceNumber: { $regex: /^\d+$/ } })
+      .select("invoiceNumber").lean();
+    const leadsWithInvoices = await Lead.find({ "paymentPlan.invoiceNumber": { $regex: /^\d+$/ } })
+      .select("paymentPlan.invoiceNumber").lean();
+
+    let runningMax = existingNumeric.reduce((max, inv) => {
+      const num = parseInt(inv.invoiceNumber, 10);
+      return num > max ? num : max;
+    }, STARTING_POINT);
+    runningMax = leadsWithInvoices.reduce((max, lead) => {
+      const num = parseInt(lead.paymentPlan?.invoiceNumber, 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, runningMax);
+
+    const created = [];
+    const skipped = [];
+
+    for (const item of invoices) {
+      const { user, enrollmentId, amount, dueDate, issueDate, invoiceNumber } = item;
+
+      if (!user || !enrollmentId || !amount) {
+        skipped.push({ user, reason: "Missing user, enrollment, or amount" });
+        continue;
+      }
+
+      // ── Race-condition safe duplicate check (bulk ke doraan bhi) ──
+      const existing = await Invoice.findOne({ enrollment: enrollmentId, status: { $ne: "CANCELLED" } });
+      if (existing) {
+        skipped.push({ user, reason: "Invoice already exists for this enrollment" });
+        continue;
+      }
+
+      // ✅ Issue date — agar item mein di gayi hai wahi use karo, warna aaj ki date
+      const invoiceDate = issueDate ? new Date(issueDate) : new Date();
+
+      // ✅ Invoice number — custom diya ho to wahi (uniqueness dobara verify karlo race-condition ke liye),
+      //    warna auto-generate karo
+      let candidate;
+      if (invoiceNumber) {
+        const clash = await invoiceNumberExists(invoiceNumber);
+        if (clash) {
+          skipped.push({ user, reason: `Invoice number ${invoiceNumber} already exists` });
+          continue;
+        }
+        candidate = invoiceNumber;
+      } else {
+        runningMax += 1;
+        candidate = String(runningMax);
+        while (await invoiceNumberExists(candidate)) {
+          runningMax += 1;
+          candidate = String(runningMax);
+        }
+      }
+
+      const invoice = await Invoice.create({
+        invoiceNumber: candidate,
+        user,
+        enrollment: enrollmentId,
+        totalAmount: amount,
+        remainingAmount: amount,
+        dueDate: dueDate || null,
+        issueDate: invoiceDate, // ✅ ab actual issue date save ho rahi hai
+        installments: [],
+      });
+
+      // ✅ Journal entry ab issue date par jayegi, current date par nahi
+      await postInvoiceJournal({
+        amount,
+        invoiceId: invoice._id,
+        userId: req.user._id,
+        description: `Invoice ${candidate} created (bulk import)`,
+        date: invoiceDate, // ✅ FIX — pehle hardcoded new Date() thi
+      });
+
+      await logAudit({
+        req,
+        action: "INVOICE_CREATED",
+        module: "finance",
+        targetId: invoice._id,
+        after: invoice.toObject(),
+      });
+
+      created.push(invoice);
+    }
+
+    res.status(201).json({
+      success: true,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

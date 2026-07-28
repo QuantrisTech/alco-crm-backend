@@ -77,17 +77,16 @@ const programSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// programSchema mein virtual add karo
-programSchema.virtual("total_students", {
-    ref: "Enrollment",
-    localField: "_id",
-    foreignField: "program",
+// ✅ Virtual yahan define hoga, schema ke saath, ek hi baar
+programSchema.virtual('total_students', {
+    ref: 'Enrollment',
+    localField: '_id',
+    foreignField: 'program',
     count: true,
-    match: { status: { $in: ["active", "completed"] } },
 });
 
-// toJSON mein virtuals enable karo
-programSchema.set("toJSON", { virtuals: true });
-programSchema.set("toObject", { virtuals: true });
+// ✅ toJSON/toObject mein virtuals include karne ke liye (warna JSON response mein nahi aayenge)
+programSchema.set('toObject', { virtuals: true });
+programSchema.set('toJSON', { virtuals: true });
 
 module.exports = mongoose.model("Program", programSchema);

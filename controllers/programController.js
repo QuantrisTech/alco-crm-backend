@@ -5,6 +5,7 @@ const Course = require("../models/courseModel.js");
 const Module = require("../models/moduleModel.js");
 const Lesson = require("../models/lessonModel.js");
 const Batch = require("../models/batchModel.js");
+const Enrollment = require("../models/enrollmentModel");
 
 // ═══════════════════════════════════════
 // PUBLIC ENDPOINTS
@@ -690,9 +691,30 @@ exports.adminGetBatchById = async (req, res) => {
             return res.status(404).json({ success: false, message: "Batch not found" });
         }
 
+        // ── Har student ke liye enrollment fetch karo ──────────
+        const studentsWithEnrollment = await Promise.all(
+            batch.students.map(async (student) => {
+                const enrollment = await Enrollment.findOne({
+                    user: student._id,
+                    program: batch.program_id._id ?? batch.program_id,
+                }).select("_id audioAccess status accessStatus");
+
+                return {
+                    ...student.toObject(),
+                    enrollmentId: enrollment?._id ?? null,
+                    audioAccess: enrollment?.audioAccess ?? true,
+                    enrollmentStatus: enrollment?.status ?? null,
+                    accessStatus: enrollment?.accessStatus ?? null,
+                };
+            })
+        );
+
         res.status(200).json({
             success: true,
-            data: batch,
+            data: {
+                ...batch.toObject(),
+                students: studentsWithEnrollment,
+            },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -721,13 +743,27 @@ exports.adminAddStudentToBatch = async (req, res) => {
         batch.current_students = batch.students.length;
         await batch.save();
 
-        // Update enrollment batch field
-        const Enrollment = require("../models/enrollmentModel");
-        await Enrollment.findOneAndUpdate(
-            { user: studentId, program: batch.program_id },
-            { batch: batch._id },
-            { new: true }
-        );
+        // Enrollment check karo
+        const existingEnrollment = await Enrollment.findOne({
+            user: studentId,
+            program: batch.program_id,
+        });
+
+        if (existingEnrollment) {
+            // Sirf batch update karo
+            await Enrollment.findByIdAndUpdate(existingEnrollment._id, {
+                batch: batch._id,
+            });
+        } else {
+            // Naya enrollment banao
+            await Enrollment.create({
+                user: studentId,
+                program: batch.program_id,
+                batch: batch._id,
+                status: "active",
+                accessStatus: "RESTRICTED",
+            });
+        }
 
         const populatedBatch = await Batch.findById(batch._id)
             .populate("program_id", "name slug")
@@ -755,7 +791,6 @@ exports.adminRemoveStudentFromBatch = async (req, res) => {
         await batch.save();
 
         // Enrollment ka batch null karo
-        const Enrollment = require("../models/enrollmentModel");
         await Enrollment.findOneAndUpdate(
             { user: studentId, batch: batch._id },
             { $unset: { batch: "" } },
@@ -787,7 +822,7 @@ exports.adminSwitchStudentBatch = async (req, res) => {
             return res.status(404).json({ success: false, message: "Target batch not found" });
         }
 
-        // Remove from current batch
+        // ── Current batch se remove + count ─────────────────
         const currentBatch = await Batch.findById(req.params.id);
         if (currentBatch) {
             currentBatch.students = currentBatch.students.filter((s) => s.toString() !== studentId);
@@ -795,15 +830,14 @@ exports.adminSwitchStudentBatch = async (req, res) => {
             await currentBatch.save();
         }
 
-        // Add to target batch
-        if (!targetBatch.students.includes(studentId)) {
+        // ── Target batch mein add + count ────────────────────
+        if (!targetBatch.students.map(s => s.toString()).includes(studentId)) {
             targetBatch.students.push(studentId);
             targetBatch.current_students = targetBatch.students.length;
             await targetBatch.save();
         }
 
-        // Update enrollment
-        const Enrollment = require("../models/enrollmentModel");
+        // ── Enrollment update ────────────────────────────────
         await Enrollment.findOneAndUpdate(
             { user: studentId, program: targetBatch.program_id },
             { batch: targetBatch._id },
@@ -815,11 +849,7 @@ exports.adminSwitchStudentBatch = async (req, res) => {
             .populate("instructor_id", "name email phone")
             .populate("students", "name email phone avatarColor");
 
-        res.status(200).json({
-            success: true,
-            message: "Student switched successfully",
-            data: populatedBatch,
-        });
+        res.status(200).json({ success: true, message: "Student switched successfully", data: populatedBatch });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -264,20 +264,25 @@ exports.enrollInProgram = async (req, res) => {
     }
 
     const record = await AudioFileAccess.findById(id);
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Request not found" });
-    }
+    if (!record) return res.status(404).json({ success: false, message: "Request not found" });
 
     const user = await User.findOne({ email: record.email });
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found for this request" });
-    }
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    // ✅ existing enrollment ho tw update karo, warna naya create karo
     const existingEnrollment = await Enrollment.findOne({ user: user._id, program: programId });
 
     let enrollment;
     if (existingEnrollment) {
+      const oldBatchId = existingEnrollment.batch?.toString();
+
+      // ── Batch switch ─────────────────────────────────────
+      if (oldBatchId && oldBatchId !== batchId) {
+        await Batch.findOneAndUpdate(
+          { _id: oldBatchId },
+          { $pull: { students: user._id }, $inc: { current_students: -1 } }
+        );
+      }
+
       existingEnrollment.batch = batchId;
       existingEnrollment.status = "active";
       existingEnrollment.accessStatus = "ACTIVE";
@@ -292,26 +297,23 @@ exports.enrollInProgram = async (req, res) => {
       });
     }
 
-    record.programsRequested = record.programsRequested.map((p) =>
-      p.program.toString() === programId.toString()
-        ? {
-          ...(p.toObject ? p.toObject() : p),
-          isAlready: true,
-          status: "enrolled",
-          rejectReason: null,
-        }
-        : p
+    // ── Batch count + students update ────────────────────
+    await Batch.findOneAndUpdate(
+      { _id: batchId, students: { $ne: user._id } },
+      { $addToSet: { students: user._id }, $inc: { current_students: 1 } }
     );
 
+    // record update...
+    record.programsRequested = record.programsRequested.map((p) =>
+      p.program.toString() === programId.toString()
+        ? { ...(p.toObject ? p.toObject() : p), isAlready: true, status: "enrolled", rejectReason: null }
+        : p
+    );
     await record.save();
     await record.populate("programsRequested.program", "name");
     await record.populate("programsGranted", "name");
 
-    res.status(200).json({
-      success: true,
-      message: "Enrolled successfully",
-      data: { enrollment, record },
-    });
+    res.status(200).json({ success: true, message: "Enrolled successfully", data: { enrollment, record } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

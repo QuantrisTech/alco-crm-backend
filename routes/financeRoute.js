@@ -2,6 +2,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { uploadExcel } = require("../middlewares/uploadExcel.js");
 
 const {
   createInvoice,
@@ -39,7 +40,9 @@ const {
   voidInstallmentPayment,
   deleteInvoice,
   checkInvoiceNumber,
-  generateInvoiceNumber
+  generateInvoiceNumber,
+  previewBulkInvoice,
+  confirmBulkInvoice
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
@@ -141,6 +144,20 @@ router.get("/reports/revenue", protect, authorize("finance_manager", "admin", "s
 router.get("/reports/monthly", protect, authorize("finance_manager", "admin", "super_admin"), getMonthlyCollections);
 router.get("/reports/pending", protect, authorize("finance_manager", "admin", "super_admin"), getPendingReport);
 
+router.post(
+  "/invoices/bulk-import/preview",
+  protect,
+  authorize("admin", "super_admin", "finance_manager"),
+  uploadExcel.single("file"),
+  previewBulkInvoice
+);
+
+router.post(
+  "/invoices/bulk-import/confirm",
+  protect,
+  authorize("admin", "super_admin", "finance_manager"),
+  confirmBulkInvoice
+);
 
 module.exports = router;
 

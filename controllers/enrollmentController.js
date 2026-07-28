@@ -2,14 +2,14 @@
 const Enrollment = require("../models/enrollmentModel.js");
 const Invoice = require("../models/invoiceModel.js");
 const Batch = require("../models/batchModel");
-const Payment = require("../models/paymentModel.js"); 
+const Payment = require("../models/paymentModel.js");
 const ExcelJS = require("exceljs");
 const User = require("../models/userModel.js");
 
 // CREATE ENROLLMENT (Improved)
 exports.createEnrollment = async (req, res) => {
   try {
-    const { user, program, batch, paymentPlan, audioAccess  } = req.body; // Include paymentPlan
+    const { user, program, batch, paymentPlan, audioAccess } = req.body; // Include paymentPlan
 
     if (!user || !program || !paymentPlan) {
       return res.status(400).json({
@@ -162,7 +162,7 @@ exports.createEnrollmentDirectBundle = async (req, res) => {
     }
 
     const enrollments = [];
-    for (const { program, batch, audioAccess } of programBatches) {  
+    for (const { program, batch, audioAccess } of programBatches) {
       const enrollment = await Enrollment.create({
         user,
         program,
@@ -617,33 +617,46 @@ exports.getEnrollmentById = async (req, res) => {
 exports.updateEnrollment = async (req, res) => {
   try {
     const { program_id, batch_id, ...rest } = req.body;
-
     const updatePayload = { ...rest };
     if (program_id !== undefined) updatePayload.program = program_id || null;
     if (batch_id !== undefined) updatePayload.batch = batch_id || null;
 
-    console.log("updateEnrollment payload:", updatePayload); // 👈 debug — terminal mein check karo
+    // ── Pehle purana enrollment fetch karo ───────────────
+    const oldEnrollment = await Enrollment.findById(req.params.id);
+    if (!oldEnrollment) return res.status(404).json({ success: false, message: "Enrollment not found" });
+
+    const oldBatchId = oldEnrollment.batch?.toString();
+    const newBatchId = batch_id !== undefined ? (batch_id || null) : oldBatchId;
+
+    // ── Batch switch hoi hai toh counts update karo ──────
+    if (newBatchId !== oldBatchId) {
+      // Purane batch se nikalo
+      if (oldBatchId) {
+        await Batch.findByIdAndUpdate(oldBatchId, {
+          $pull: { students: oldEnrollment.user },
+          $inc: { current_students: -1 },
+        });
+      }
+      // Naye batch mein add karo
+      if (newBatchId) {
+        await Batch.findOneAndUpdate(
+          { _id: newBatchId, students: { $ne: oldEnrollment.user } },
+          { $addToSet: { students: oldEnrollment.user }, $inc: { current_students: 1 } }
+        );
+      }
+    }
 
     const enrollment = await Enrollment.findByIdAndUpdate(
       req.params.id,
       { $set: updatePayload },
       { new: true, runValidators: true }
     )
-      .populate("program")     // 👈 add karo
-      .populate("batch")       // 👈 add karo
+      .populate("program").populate("batch")
       .populate("user", "name email phone role")
       .populate("assigned_to", "name email");
 
-    if (!enrollment) {
-      return res.status(404).json({
-        success: false,
-        message: "Enrollment not found",
-      });
-    }
-
     res.json({ success: true, data: enrollment });
   } catch (err) {
-    console.error("updateEnrollment error:", err); // 👈 debug
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -651,23 +664,23 @@ exports.updateEnrollment = async (req, res) => {
 // DELETE
 exports.deleteEnrollment = async (req, res) => {
   try {
-    const deleted = await Enrollment.findByIdAndDelete(req.params.id);
+    const enrollment = await Enrollment.findById(req.params.id);
+    if (!enrollment) return res.status(404).json({ success: false, message: "Enrollment not found" });
 
-    if (!deleted) {
-      return res.status(404).json({
-        success: false,
-        message: "Enrollment not found",
+    // ── Batch count kam karo ──────────────────────────────
+    if (enrollment.batch) {
+      await Batch.findByIdAndUpdate(enrollment.batch, {
+        $pull: { students: enrollment.user },
+        $inc: { current_students: -1 },
       });
     }
 
-    res.json({
-      success: true,
-      message: "Enrollment deleted successfully",
-    });
+    await Enrollment.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "Enrollment deleted successfully" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
-};
+}
 
 // GRADUATE
 exports.graduateEnrollment = async (req, res) => {
@@ -744,18 +757,18 @@ exports.assignEnrollment = async (req, res) => {
 exports.previewBulkEnrollment = async (req, res) => {
   try {
     const { program, batch } = req.body;
- 
+
     if (!program) {
       return res.status(400).json({ success: false, message: "Program is required" });
     }
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Excel file is required" });
     }
- 
+
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
     const worksheet = workbook.worksheets[0];
- 
+
     // ✅ Column B = Email (same file format jo users import mein use hoti hai: Name, Email, Phone)
     const emails = [];
     worksheet.eachRow((row, rowNumber) => {
@@ -763,18 +776,18 @@ exports.previewBulkEnrollment = async (req, res) => {
       const email = row.getCell(2).text?.trim().toLowerCase();
       if (email) emails.push(email);
     });
- 
+
     if (emails.length === 0) {
       return res.status(400).json({ success: false, message: "No valid emails found in file" });
     }
- 
+
     // ✅ file ke andar duplicate emails hata do
     const uniqueEmails = [...new Set(emails)];
- 
+
     // ✅ DB mein users dhoondo
     const users = await User.find({ email: { $in: uniqueEmails } }).select("name email phone");
     const userMap = new Map(users.map((u) => [u.email, u]));
- 
+
     // ✅ In users ki is program mein existing enrollments check karo
     const foundUserIds = users.map((u) => u._id);
     const existingEnrollments = await Enrollment.find({
@@ -794,11 +807,11 @@ exports.previewBulkEnrollment = async (req, res) => {
         },
       ])
     );
- 
+
     // ✅ Preview rows banao
     const preview = uniqueEmails.map((email) => {
       const user = userMap.get(email);
- 
+
       if (!user) {
         return {
           email,
@@ -806,7 +819,7 @@ exports.previewBulkEnrollment = async (req, res) => {
           status: "not_found", // system mein user hi nahi
         };
       }
- 
+
       const existing = enrolledMap.get(user._id.toString());
       if (existing) {
         return {
@@ -823,7 +836,7 @@ exports.previewBulkEnrollment = async (req, res) => {
           currentAssignedTo: existing.assignedTo,
         };
       }
- 
+
       return {
         email,
         user: {
@@ -835,7 +848,7 @@ exports.previewBulkEnrollment = async (req, res) => {
         status: "eligible",
       };
     });
- 
+
     res.status(200).json({
       success: true,
       program,
@@ -850,7 +863,7 @@ exports.previewBulkEnrollment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
- 
+
 // ─────────────────────────────────────────────────────────
 // STEP 2: CONFIRM — actual enrollment creation (single row ya bulk, same endpoint)
 // ─────────────────────────────────────────────────────────
@@ -858,29 +871,29 @@ exports.bulkConfirmEnrollment = async (req, res) => {
   try {
     const { enrollments } = req.body;
     // enrollments: [{ user, program, batch, assigned_to, audioAccess }]
- 
+
     if (!Array.isArray(enrollments) || enrollments.length === 0) {
       return res.status(400).json({ success: false, message: "enrollments array is required" });
     }
- 
+
     const created = [];
     const skipped = [];
- 
+
     for (const item of enrollments) {
       const { user, program, batch, assigned_to, audioAccess } = item;
- 
+
       if (!user || !program) {
         skipped.push({ user, program, reason: "Missing user or program" });
         continue;
       }
- 
+
       // ✅ Race-condition safe duplicate check (bulk ke doraan bhi)
       const exists = await Enrollment.findOne({ user, program });
       if (exists) {
         skipped.push({ user, program, reason: "Already enrolled" });
         continue;
       }
- 
+
       const enrollment = await Enrollment.create({
         user,
         program,
@@ -888,17 +901,17 @@ exports.bulkConfirmEnrollment = async (req, res) => {
         audioAccess: audioAccess ?? true,
         assigned_to: assigned_to || req.user._id,
       });
- 
+
       if (batch) {
         await Batch.findOneAndUpdate(
           { _id: batch, students: { $ne: user } },
           { $addToSet: { students: user }, $inc: { current_students: 1 } }
         );
       }
- 
+
       created.push(enrollment);
     }
- 
+
     res.status(201).json({
       success: true,
       createdCount: created.length,
