@@ -3515,6 +3515,32 @@ exports.generateInvoiceNumber = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ✅ Explicit MM-DD-YYYY parser
+function parseMMDDYYYY(text) {
+  if (!text) return null;
+  const trimmed = text.trim();
+  const parts = trimmed.split(/[\/\-]/);
+  if (parts.length !== 3) {
+    const fallback = new Date(trimmed);
+    return isNaN(fallback.getTime()) ? null : fallback;
+  }
+  const [mm, dd, yyyy] = parts.map(Number);
+  if (!mm || !dd || !yyyy) return null;
+  const date = new Date(yyyy, mm - 1, dd);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function computeInvoiceStatus(paidAmount, totalAmount) {
+  if (paidAmount <= 0) return "PENDING";
+  if (paidAmount >= totalAmount) return "PAID";
+  return "PARTIAL";
+}
+
+// ✅ Ye functions financeController.js mein ADD/REPLACE karni hain (existing exports ke sath)
+// NOTE: `invoiceNumberExists` helper already isi file mein defined hai (module-level function) — reuse ho raha hai.
+// Top mein already ye imports maujood hain: ExcelJS, User, Enrollment, Lead, Invoice, postInvoiceJournal, logAudit
+
 // ─────────────────────────────────────────────────────────
 // STEP 1: PREVIEW — Excel parse + user match + ALL enrollments per user
 // ─────────────────────────────────────────────────────────
@@ -3523,61 +3549,60 @@ exports.previewBulkInvoice = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Excel file is required" });
     }
-
+ 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
     const worksheet = workbook.worksheets[0];
-
-    // ✅ Column A = Name, B = Email, C = Amount, D = Due Date (optional),
-    //    E = Issue Date (optional), F = Invoice Number (optional)
+ 
     const parsedRows = [];
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // header skip
       const email = row.getCell(2).text?.trim().toLowerCase();
-      const amountRaw = row.getCell(3).text?.trim();
+      const fallbackAmountRaw = row.getCell(3).text?.trim();
       const dueDateRaw = row.getCell(4).text?.trim();
       const issueDateRaw = row.getCell(5).text?.trim();
       const invoiceNumberRaw = row.getCell(6).text?.trim();
-
-      if (email && amountRaw) {
+      const advanceAmountRaw = row.getCell(7).text?.trim();
+ 
+      if (email) {
         parsedRows.push({
           email,
-          amount: Number(amountRaw),
+          fallbackAmount: fallbackAmountRaw ? Number(fallbackAmountRaw) : 0,
           dueDate: dueDateRaw ? new Date(dueDateRaw) : null,
-          // ✅ Agar Excel mein issue date di hai to wahi use hogi, warna aaj ki date default
-          issueDate: issueDateRaw ? new Date(issueDateRaw) : new Date(),
+          issueDate: issueDateRaw ? new Date(issueDateRaw) : null,
           invoiceNumber: invoiceNumberRaw || null,
+          advanceAmount: advanceAmountRaw ? Number(advanceAmountRaw) : 0,
         });
       }
     });
-
+ 
     if (parsedRows.length === 0) {
-      return res.status(400).json({ success: false, message: "No valid rows found (Email + Amount required)" });
+      return res.status(400).json({ success: false, message: "No valid rows found (Email required)" });
     }
-
+ 
     // ✅ file ke andar duplicate emails hata do (last occurrence rakho)
     const rowMap = new Map();
     parsedRows.forEach((r) => rowMap.set(r.email, r));
     const uniqueRows = Array.from(rowMap.values());
-
+ 
     // ✅ DB mein users dhoondo
     const emails = uniqueRows.map((r) => r.email);
     const users = await User.find({ email: { $in: emails } }).select("name email phone");
     const userMap = new Map(users.map((u) => [u.email, u]));
-
+ 
     // ✅ In users ki SAARI enrollments dhoondo (bundle = multiple programs)
     const foundUserIds = users.map((u) => u._id);
     const allEnrollments = await Enrollment.find({ user: { $in: foundUserIds } })
       .populate("program", "name")
       .select("user program");
-
+ 
     const enrollmentsByUser = new Map();
     allEnrollments.forEach((e) => {
       const uid = e.user.toString();
       if (!enrollmentsByUser.has(uid)) enrollmentsByUser.set(uid, []);
       enrollmentsByUser.get(uid).push(e);
     });
-
+ 
     // ✅ In enrollments mein se kaunsi already invoiced hain (non-cancelled)
     const allEnrollmentIds = allEnrollments.map((e) => e._id);
     const existingInvoices = await Invoice.find({
@@ -3585,74 +3610,76 @@ exports.previewBulkInvoice = async (req, res) => {
       status: { $ne: "CANCELLED" },
     }).select("enrollment invoiceNumber totalAmount status");
     const invoicedEnrollmentMap = new Map(existingInvoices.map((inv) => [inv.enrollment.toString(), inv]));
-
-    // ✅ Agar Excel mein custom invoice numbers diye gaye hain, unki uniqueness bhi check karlo
-    const requestedInvoiceNumbers = uniqueRows
-      .map((r) => r.invoiceNumber)
-      .filter(Boolean);
-    const clashingInvoices = requestedInvoiceNumbers.length
-      ? await Invoice.find({ invoiceNumber: { $in: requestedInvoiceNumbers } }).select("invoiceNumber")
-      : [];
-    const clashingNumberSet = new Set(clashingInvoices.map((inv) => inv.invoiceNumber));
-
+ 
     // ✅ Preview rows banao
-    const preview = uniqueRows.map((r) => {
+    const preview = [];
+    for (const r of uniqueRows) {
       const user = userMap.get(r.email);
       if (!user) {
-        return { email: r.email, user: null, status: "not_found" };
+        preview.push({ email: r.email, user: null, status: "not_found" });
+        continue;
       }
-
+ 
       const userInfo = { _id: user._id, name: user.name, email: user.email, phone: user.phone };
-      const userEnrollments = enrollmentsByUser.get(user._id.toString()) || [];
-
-      if (userEnrollments.length === 0) {
-        return { email: r.email, user: userInfo, status: "no_enrollment", enrollmentOptions: [] };
+ 
+      // ✅ Agar Excel mein invoice number diya gaya hai, uski uniqueness check karo
+      if (r.invoiceNumber) {
+        const taken = await invoiceNumberExists(r.invoiceNumber);
+        if (taken) {
+          preview.push({
+            email: r.email,
+            user: userInfo,
+            status: "invalid_invoice_number",
+            invoiceNumber: r.invoiceNumber,
+          });
+          continue;
+        }
       }
-
+ 
+      const userEnrollments = enrollmentsByUser.get(user._id.toString()) || [];
+ 
+      if (userEnrollments.length === 0) {
+        preview.push({ email: r.email, user: userInfo, status: "no_enrollment", enrollmentOptions: [] });
+        continue;
+      }
+ 
       const enrollmentOptions = userEnrollments.map((e) => {
         const existingInv = invoicedEnrollmentMap.get(e._id.toString());
         return {
           enrollmentId: e._id,
+          programId: e.program?._id || null,
           programName: e.program?.name || "—",
+          // ✅ FIX: agar user ki sirf EK enrollment hai to fallback amount seedha use karo.
+          // Agar 2+ hain (bundle) to 0 default rakho — warna har program ko poora fallback
+          // mil jata tha aur total galat (double/triple) ban jata tha. Admin har program
+          // ke liye amount manually type karega review screen par.
+          defaultAmount: userEnrollments.length === 1 ? (r.fallbackAmount || 0) : 0,
           hasInvoice: !!existingInv,
           existingInvoiceNumber: existingInv?.invoiceNumber || null,
         };
       });
-
-      if (!r.amount || isNaN(r.amount) || r.amount <= 0) {
-        return { email: r.email, user: userInfo, status: "invalid_amount", enrollmentOptions };
+ 
+      const availableOptions = enrollmentOptions.filter((o) => !o.hasInvoice);
+ 
+      if (availableOptions.length === 0) {
+        // ✅ is user ki SAARI enrollments already invoiced hain
+        preview.push({ email: r.email, user: userInfo, status: "duplicate", enrollmentOptions });
+        continue;
       }
-
-      // ✅ Agar custom invoice number diya gaya hai aur wo already kisi aur invoice mein use ho chuka hai
-      if (r.invoiceNumber && clashingNumberSet.has(r.invoiceNumber)) {
-        return {
-          email: r.email,
-          user: userInfo,
-          status: "invalid_invoice_number",
-          enrollmentOptions,
-          requestedInvoiceNumber: r.invoiceNumber,
-        };
-      }
-
-      const availableOption = enrollmentOptions.find((o) => !o.hasInvoice);
-
-      if (!availableOption) {
-        return { email: r.email, user: userInfo, status: "duplicate", enrollmentOptions };
-      }
-
-      return {
+ 
+      preview.push({
         email: r.email,
         user: userInfo,
         status: "eligible",
         enrollmentOptions,
-        selectedEnrollmentId: availableOption.enrollmentId,
-        amount: r.amount,
+        defaultSelectedIds: availableOptions.map((o) => o.enrollmentId), // ✅ sab available default-checked
         dueDate: r.dueDate,
-        issueDate: r.issueDate,               // ✅ ab preview mein bhi bhej rahe hain
-        invoiceNumber: r.invoiceNumber || null, // ✅ custom number agar diya ho
-      };
-    });
-
+        issueDate: r.issueDate,
+        invoiceNumber: r.invoiceNumber || undefined,
+        advanceAmount: r.advanceAmount || 0,
+      });
+    }
+ 
     res.status(200).json({
       success: true,
       totalRows: uniqueRows.length,
@@ -3660,33 +3687,34 @@ exports.previewBulkInvoice = async (req, res) => {
       duplicateCount: preview.filter((p) => p.status === "duplicate").length,
       noEnrollmentCount: preview.filter((p) => p.status === "no_enrollment").length,
       notFoundCount: preview.filter((p) => p.status === "not_found").length,
-      invalidCount: preview.filter((p) => p.status === "invalid_amount" || p.status === "invalid_invoice_number").length,
+      invalidCount: preview.filter((p) => p.status === "invalid_invoice_number").length,
       preview,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+ 
 // ─────────────────────────────────────────────────────────
-// STEP 2: CONFIRM — actual invoice creation (single row ya bulk, same endpoint)
+// STEP 2: CONFIRM — actual invoice creation
+// Payload: [{ user, invoiceNumber?, dueDate?, issueDate?, advanceAmount?, items: [{enrollmentId, programId, programName, amount, discount}] }]
+// Har row = EK invoice. Agar items.length > 1 → bundle invoice (jaisa aapka createInvoice bundle handle karta hai).
 // ─────────────────────────────────────────────────────────
 exports.confirmBulkInvoice = async (req, res) => {
   try {
     const { invoices } = req.body;
-    // invoices: [{ user, enrollmentId, amount, dueDate, issueDate, invoiceNumber }]
-
+ 
     if (!Array.isArray(invoices) || invoices.length === 0) {
       return res.status(400).json({ success: false, message: "invoices array is required" });
     }
-
+ 
     // ── Invoice number baseline — bilkul same logic jo generateInvoiceNumber mein hai ──
     const STARTING_POINT = 2090;
     const existingNumeric = await Invoice.find({ invoiceNumber: { $regex: /^\d+$/ } })
       .select("invoiceNumber").lean();
     const leadsWithInvoices = await Lead.find({ "paymentPlan.invoiceNumber": { $regex: /^\d+$/ } })
       .select("paymentPlan.invoiceNumber").lean();
-
+ 
     let runningMax = existingNumeric.reduce((max, inv) => {
       const num = parseInt(inv.invoiceNumber, 10);
       return num > max ? num : max;
@@ -3695,67 +3723,126 @@ exports.confirmBulkInvoice = async (req, res) => {
       const num = parseInt(lead.paymentPlan?.invoiceNumber, 10);
       return !isNaN(num) && num > max ? num : max;
     }, runningMax);
-
+ 
     const created = [];
     const skipped = [];
-
-    for (const item of invoices) {
-      const { user, enrollmentId, amount, dueDate, issueDate, invoiceNumber } = item;
-
-      if (!user || !enrollmentId || !amount) {
-        skipped.push({ user, reason: "Missing user, enrollment, or amount" });
+ 
+    for (const row of invoices) {
+      const { user, invoiceNumber, dueDate, issueDate, advanceAmount, items } = row;
+ 
+      if (!user || !Array.isArray(items) || items.length === 0) {
+        skipped.push({ user, reason: "Missing user or items" });
         continue;
       }
-
-      // ── Race-condition safe duplicate check (bulk ke doraan bhi) ──
-      const existing = await Invoice.findOne({ enrollment: enrollmentId, status: { $ne: "CANCELLED" } });
-      if (existing) {
-        skipped.push({ user, reason: "Invoice already exists for this enrollment" });
+ 
+      // ── Race-condition safe check: koi bhi selected enrollment already invoiced to nahi? ──
+      const enrollmentIds = items.map((it) => it.enrollmentId);
+      const alreadyInvoiced = await Invoice.findOne({
+        enrollment: { $in: enrollmentIds },
+        status: { $ne: "CANCELLED" },
+      });
+      if (alreadyInvoiced) {
+        skipped.push({ user, reason: "One or more selected enrollments already invoiced" });
         continue;
       }
-
-      // ✅ Issue date — agar item mein di gayi hai wahi use karo, warna aaj ki date
-      const invoiceDate = issueDate ? new Date(issueDate) : new Date();
-
-      // ✅ Invoice number — custom diya ho to wahi (uniqueness dobara verify karlo race-condition ke liye),
-      //    warna auto-generate karo
-      let candidate;
-      if (invoiceNumber) {
-        const clash = await invoiceNumberExists(invoiceNumber);
-        if (clash) {
-          skipped.push({ user, reason: `Invoice number ${invoiceNumber} already exists` });
+ 
+      // ── Invoice number resolve karo (Excel wala use karo, warna auto-generate) ──
+      let finalInvoiceNumber = invoiceNumber;
+      if (finalInvoiceNumber) {
+        const taken = await invoiceNumberExists(finalInvoiceNumber);
+        if (taken) {
+          skipped.push({ user, reason: `Invoice number ${finalInvoiceNumber} already taken` });
           continue;
         }
-        candidate = invoiceNumber;
       } else {
         runningMax += 1;
-        candidate = String(runningMax);
+        let candidate = String(runningMax);
         while (await invoiceNumberExists(candidate)) {
           runningMax += 1;
           candidate = String(runningMax);
         }
+        finalInvoiceNumber = candidate;
       }
-
+ 
+      const invoiceDate = issueDate ? new Date(issueDate) : new Date();
+      const isBundle = items.length > 1;
+ 
+      // ── Har item ka net amount (amount - discount) nikalo ──
+      const netItems = items.map((it) => ({
+        ...it,
+        netAmount: Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)),
+      }));
+      const totalAmount = netItems.reduce((sum, it) => sum + it.netAmount, 0);
+ 
+      if (totalAmount <= 0) {
+        skipped.push({ user, reason: "Total amount is zero — check amounts/discounts" });
+        continue;
+      }
+ 
+      // ── Advance amount se installments banao (agar diya gaya ho) ──
+      let installments = [];
+      const advance = Number(advanceAmount || 0);
+      if (advance > 0 && advance < totalAmount) {
+        installments = [
+          {
+            label: "Advance",
+            amount: advance,
+            isAdvance: true,
+            feeType: "program",
+            status: "PENDING",
+            paidAmount: 0,
+            dueDate: dueDate ? new Date(dueDate) : null,
+          },
+          {
+            label: "Remaining Balance",
+            amount: totalAmount - advance,
+            isAdvance: false,
+            feeType: "program",
+            status: "PENDING",
+            paidAmount: 0,
+            dueDate: dueDate ? new Date(dueDate) : null,
+          },
+        ];
+      }
+ 
       const invoice = await Invoice.create({
-        invoiceNumber: candidate,
+        invoiceNumber: finalInvoiceNumber,
         user,
-        enrollment: enrollmentId,
-        totalAmount: amount,
-        remainingAmount: amount,
+        enrollment: netItems[0].enrollmentId, // primary enrollment (bundle ke liye bhi required)
+        isBundle,
+        enrollments: isBundle ? netItems.map((it) => it.enrollmentId) : undefined,
+        items: isBundle
+          ? netItems.map((it) => ({
+              program: it.programId || undefined,
+              programName: it.programName,
+              enrollment: it.enrollmentId,
+              amount: it.netAmount,
+              feeType: "program",
+            }))
+          : undefined,
+        totalAmount,
+        remainingAmount: totalAmount,
         dueDate: dueDate || null,
-        issueDate: invoiceDate, // ✅ ab actual issue date save ho rahi hai
-        installments: [],
+        issueDate: invoiceDate,
+        installments,
       });
-
-      // ✅ Journal entry ab issue date par jayegi, current date par nahi
+ 
+      if (isBundle) {
+        await Enrollment.updateMany(
+          { _id: { $in: netItems.map((it) => it.enrollmentId) } },
+          { invoice: invoice._id }
+        );
+      }
+ 
+      // ✅ Bilkul wahi journal function jo normal single invoice creation mein use hota hai
       await postInvoiceJournal({
-        amount,
+        amount: totalAmount,
         invoiceId: invoice._id,
         userId: req.user._id,
-        description: `Invoice ${candidate} created (bulk import)`,
-        date: invoiceDate, // ✅ FIX — pehle hardcoded new Date() thi
+        description: `Invoice ${finalInvoiceNumber} created (bulk import)${isBundle ? " — bundle" : ""}`,
+        date: invoiceDate,
       });
-
+ 
       await logAudit({
         req,
         action: "INVOICE_CREATED",
@@ -3763,10 +3850,10 @@ exports.confirmBulkInvoice = async (req, res) => {
         targetId: invoice._id,
         after: invoice.toObject(),
       });
-
+ 
       created.push(invoice);
     }
-
+ 
     res.status(201).json({
       success: true,
       createdCount: created.length,
