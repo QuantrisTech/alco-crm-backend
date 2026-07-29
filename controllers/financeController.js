@@ -3593,7 +3593,8 @@ exports.previewBulkInvoice = async (req, res) => {
     // ✅ In users ki SAARI enrollments dhoondo (bundle = multiple programs)
     const foundUserIds = users.map((u) => u._id);
     const allEnrollments = await Enrollment.find({ user: { $in: foundUserIds } })
-      .populate("program", "name")
+    // .populate("program", "name")
+      .populate("program", "name price")
       .select("user program");
  
     const enrollmentsByUser = new Map();
@@ -3649,11 +3650,9 @@ exports.previewBulkInvoice = async (req, res) => {
           enrollmentId: e._id,
           programId: e.program?._id || null,
           programName: e.program?.name || "—",
-          // ✅ FIX: agar user ki sirf EK enrollment hai to fallback amount seedha use karo.
-          // Agar 2+ hain (bundle) to 0 default rakho — warna har program ko poora fallback
-          // mil jata tha aur total galat (double/triple) ban jata tha. Admin har program
-          // ke liye amount manually type karega review screen par.
-          defaultAmount: userEnrollments.length === 1 ? (r.fallbackAmount || 0) : 0,
+          // defaultAmount: userEnrollments.length === 1 ? (r.fallbackAmount || 0) : 0,
+          // ✅ Har program apna price le, bundle mein bhi correct amount milega
+          defaultAmount: e.program?.price || r.fallbackAmount || 0,
           hasInvoice: !!existingInv,
           existingInvoiceNumber: existingInv?.invoiceNumber || null,
         };
