@@ -9,8 +9,10 @@ const {
   updateWebinar,
   deleteWebinar,
   getWebinarRegistrations,
+  // assignWebinar,
   getPublicWebinar,
-  registerForWebinar
+  registerForWebinar,
+  duplicateWebinar
 } = require('../controllers/webinarsController.js');
 
 // ---------- ADMIN ROUTES ----------
@@ -20,6 +22,9 @@ router.get('/:id', protect, authorize('admin', 'super_admin'), getWebinarById);
 router.put('/:id', protect, authorize('admin', 'super_admin'), updateWebinar);
 router.delete('/:id', protect, authorize('admin', 'super_admin'), deleteWebinar);
 router.get('/:id/registrations', protect, authorize('admin', 'super_admin'), getWebinarRegistrations);
+// routes/webinarRoutes.js
+// router.patch('/:id/assign', protect, authorize('admin', 'super_admin'), assignWebinar);// routes/webinarRoutes.js
+router.post('/:id/duplicate', protect, authorize('admin', 'super_admin'), duplicateWebinar);
 
 // ---------- PUBLIC ROUTES ----------
 router.get('/public/:id', getPublicWebinar);

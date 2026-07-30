@@ -10,7 +10,8 @@ const FieldSchema = new mongoose.Schema({
   },
   required: { type: Boolean, default: false },
   options: [{ type: String }], // for select/checkbox
-  order: { type: Number, default: 0 }
+  order: { type: Number, default: 0 },
+  allowOther: { type: Boolean, default: false }, 
 }, { _id: false });
 
 const WebinarSchema = new mongoose.Schema({
