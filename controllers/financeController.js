@@ -3539,80 +3539,231 @@ function computeInvoiceStatus(paidAmount, totalAmount) {
 
 // ✅ Ye functions financeController.js mein ADD/REPLACE karni hain (existing exports ke sath)
 // NOTE: `invoiceNumberExists` helper already isi file mein defined hai (module-level function) — reuse ho raha hai.
-// Top mein already ye imports maujood hain: ExcelJS, User, Enrollment, Lead, Invoice, postInvoiceJournal, logAudit
+// Top mein already ye imports maujood hain: ExcelJS, User, Enrollment, Lead, Invoice, Payment,
+// postInvoiceJournal, postPaymentJournal, logAudit
 
 // ─────────────────────────────────────────────────────────
-// STEP 1: PREVIEW — Excel parse + user match + ALL enrollments per user
+// HELPER: Header row parse karo — column LETTERS pe depend nahi karte,
+// header TEXT se match karte hain. Finance team jis order mein bhi
+// columns rakhe, system samajh jayega.
+//
+// Expected headers (case-insensitive, exact text match):
+//   Name, Email, Amount, Due Date, Issue Date, Invoice Number,
+//   Advance Amount, Advance Paid Date, Advance Description,
+//   Installment 1 Amount, Installment 1 Due Date, Installment 1 Description, Installment 1 Paid Date,
+//   Installment 2 Amount, Installment 2 Due Date, Installment 2 Description, Installment 2 Paid Date,
+//   ... (jitni installments chahiye utni add kar sakte hain)
+// ─────────────────────────────────────────────────────────
+function buildHeaderMap(worksheet) {
+  const headerRow = worksheet.getRow(1);
+  const map = {
+    installments: {}, // { 1: { amount, dueDate, description, paidDate }, 2: {...} }
+  };
+
+  const installmentPattern = /^installment\s*(\d+)\s*(amount|due date|description|paid date)$/i;
+
+  headerRow.eachCell((cell, colNumber) => {
+    const text = String(cell.value || "").trim().toLowerCase();
+    if (!text) return;
+
+    if (text === "name") map.name = colNumber;
+    else if (text === "email") map.email = colNumber;
+    else if (text === "amount") map.amount = colNumber;
+    else if (text === "due date") map.dueDate = colNumber;
+    else if (text === "issue date") map.issueDate = colNumber;
+    else if (text === "invoice number") map.invoiceNumber = colNumber;
+    else if (text === "advance amount") map.advanceAmount = colNumber;
+    else if (text === "advance paid date") map.advancePaidDate = colNumber;
+    else if (text === "advance description") map.advanceDescription = colNumber;
+    else {
+      const m = text.match(installmentPattern);
+      if (m) {
+        const num = m[1];
+        const field = m[2]; // "amount" | "due date" | "description" | "paid date"
+        if (!map.installments[num]) map.installments[num] = {};
+        if (field === "amount") map.installments[num].amount = colNumber;
+        else if (field === "due date") map.installments[num].dueDate = colNumber;
+        else if (field === "description") map.installments[num].description = colNumber;
+        else if (field === "paid date") map.installments[num].paidDate = colNumber;
+      }
+    }
+  });
+
+  return map;
+}
+
+// ✅ ExcelJS ke cell.value ko safely nikalo — Date/Number/String/rich-text sab handle karta hai.
+// Purani buggy version cell.text?.trim() use karti thi, jo Date ya Number cells par crash
+// karti thi (".trim is not a function") kyunki .text un cases mein string nahi hoti.
+function cellRawValue(row, colNumber) {
+  if (!colNumber) return null;
+  const cell = row.getCell(colNumber);
+  let val = cell.value;
+  if (val === null || val === undefined) return null;
+  if (val instanceof Date) return val;
+
+  // hyperlink / formula / rich-text ko unwrap karo — nested bhi ho sakta hai
+  let depth = 0;
+  while (typeof val === "object" && val !== null && !(val instanceof Date) && depth < 5) {
+    if (val.richText) {
+      return val.richText.map((rt) => rt.text).join("");
+    }
+    if (val.text !== undefined) {
+      val = val.text; // hyperlink ka text — ye khud richText object bhi ho sakta hai
+      depth++;
+      continue;
+    }
+    if (val.result !== undefined) {
+      val = val.result; // formula result
+      depth++;
+      continue;
+    }
+    break;
+  }
+
+  if (val instanceof Date) return val;
+  if (typeof val === "object") return null;
+  return val;
+}
+
+function cellText(row, colNumber) {
+  const val = cellRawValue(row, colNumber);
+  if (val === null || val === undefined) return null;
+  if (val instanceof Date) return val.toISOString();
+  const str = String(val).trim();
+  return str || null;
+}
+
+function cellDate(row, colNumber) {
+  const val = cellRawValue(row, colNumber);
+  if (val === null || val === undefined) return null;
+  if (val instanceof Date) return val;
+  const parsed = new Date(val);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function cellNumber(row, colNumber) {
+  const val = cellRawValue(row, colNumber);
+  if (val === null || val === undefined) return 0;
+  if (val instanceof Date) return 0;
+  const num = Number(val);
+  return isNaN(num) ? 0 : num;
+}
+
+// ✅ Due date automation: agar due date nahi di gayi lekin paidDate hai,
+// to paidDate + 7 din (1 hafta) ko due date bana do
+function resolveDueDate(explicitDueDate, paidDate) {
+  if (explicitDueDate) return explicitDueDate;
+  if (paidDate) {
+    const d = new Date(paidDate);
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 1: PREVIEW — Excel parse (header-based) + user match + ALL enrollments per user
 // ─────────────────────────────────────────────────────────
 exports.previewBulkInvoice = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Excel file is required" });
     }
- 
+
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
     const worksheet = workbook.worksheets[0];
- 
+
+    const headerMap = buildHeaderMap(worksheet);
+    if (!headerMap.email) {
+      return res.status(400).json({ success: false, message: "'Email' column not found in header row" });
+    }
+
     const parsedRows = [];
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // header skip
-      const email = row.getCell(2).text?.trim().toLowerCase();
-      const fallbackAmountRaw = row.getCell(3).text?.trim();
-      const dueDateRaw = row.getCell(4).text?.trim();
-      const issueDateRaw = row.getCell(5).text?.trim();
-      const invoiceNumberRaw = row.getCell(6).text?.trim();
-      const advanceAmountRaw = row.getCell(7).text?.trim();
- 
-      if (email) {
-        parsedRows.push({
-          email,
-          fallbackAmount: fallbackAmountRaw ? Number(fallbackAmountRaw) : 0,
-          dueDate: dueDateRaw ? new Date(dueDateRaw) : null,
-          issueDate: issueDateRaw ? new Date(issueDateRaw) : null,
-          invoiceNumber: invoiceNumberRaw || null,
-          advanceAmount: advanceAmountRaw ? Number(advanceAmountRaw) : 0,
-        });
-      }
+
+      const email = cellText(row, headerMap.email)?.toLowerCase();
+      if (!email) return;
+
+      const fallbackAmount = cellNumber(row, headerMap.amount);
+      const dueDate = cellDate(row, headerMap.dueDate);
+      const issueDate = cellDate(row, headerMap.issueDate);
+      const invoiceNumber = cellText(row, headerMap.invoiceNumber);
+      const advanceAmount = cellNumber(row, headerMap.advanceAmount);
+      const advancePaidDate = cellDate(row, headerMap.advancePaidDate);
+      const advanceDescription = cellText(row, headerMap.advanceDescription) || "Advance Payment";
+
+      // ✅ Installments dynamically nikalo (jitni bhi header mein defined hain)
+      const installments = Object.entries(headerMap.installments)
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([num, cols]) => {
+          const amount = cellNumber(row, cols.amount);
+          const paidDate = cellDate(row, cols.paidDate);
+          const explicitDueDate = cellDate(row, cols.dueDate);
+          return {
+            number: Number(num),
+            amount,
+            dueDate: resolveDueDate(explicitDueDate, paidDate),
+            description: cellText(row, cols.description) || `Installment ${num}`,
+            paidDate,
+          };
+        })
+        .filter((i) => i.amount > 0); // ✅ khaali installment slots skip karo
+
+      parsedRows.push({
+        email,
+        fallbackAmount,
+        dueDate,
+        issueDate,
+        invoiceNumber,
+        advance: advanceAmount > 0
+          ? {
+              amount: advanceAmount,
+              dueDate: resolveDueDate(dueDate, advancePaidDate),
+              description: advanceDescription,
+              paidDate: advancePaidDate,
+            }
+          : null,
+        installments,
+      });
     });
- 
+
     if (parsedRows.length === 0) {
       return res.status(400).json({ success: false, message: "No valid rows found (Email required)" });
     }
- 
+
     // ✅ file ke andar duplicate emails hata do (last occurrence rakho)
     const rowMap = new Map();
     parsedRows.forEach((r) => rowMap.set(r.email, r));
     const uniqueRows = Array.from(rowMap.values());
- 
+
     // ✅ DB mein users dhoondo
     const emails = uniqueRows.map((r) => r.email);
     const users = await User.find({ email: { $in: emails } }).select("name email phone");
     const userMap = new Map(users.map((u) => [u.email, u]));
- 
+
     // ✅ In users ki SAARI enrollments dhoondo (bundle = multiple programs)
     const foundUserIds = users.map((u) => u._id);
     const allEnrollments = await Enrollment.find({ user: { $in: foundUserIds } })
-    // .populate("program", "name")
       .populate("program", "name price")
       .select("user program");
- 
+
     const enrollmentsByUser = new Map();
     allEnrollments.forEach((e) => {
       const uid = e.user.toString();
       if (!enrollmentsByUser.has(uid)) enrollmentsByUser.set(uid, []);
       enrollmentsByUser.get(uid).push(e);
     });
- 
-    // ✅ In enrollments mein se kaunsi already invoiced hain (non-cancelled)
+
     const allEnrollmentIds = allEnrollments.map((e) => e._id);
     const existingInvoices = await Invoice.find({
       enrollment: { $in: allEnrollmentIds },
       status: { $ne: "CANCELLED" },
     }).select("enrollment invoiceNumber totalAmount status");
     const invoicedEnrollmentMap = new Map(existingInvoices.map((inv) => [inv.enrollment.toString(), inv]));
- 
-    // ✅ Preview rows banao
+
     const preview = [];
     for (const r of uniqueRows) {
       const user = userMap.get(r.email);
@@ -3620,30 +3771,25 @@ exports.previewBulkInvoice = async (req, res) => {
         preview.push({ email: r.email, user: null, status: "not_found" });
         continue;
       }
- 
+
       const userInfo = { _id: user._id, name: user.name, email: user.email, phone: user.phone };
- 
-      // ✅ Agar Excel mein invoice number diya gaya hai, uski uniqueness check karo
+
       if (r.invoiceNumber) {
         const taken = await invoiceNumberExists(r.invoiceNumber);
         if (taken) {
           preview.push({
-            email: r.email,
-            user: userInfo,
-            status: "invalid_invoice_number",
-            invoiceNumber: r.invoiceNumber,
+            email: r.email, user: userInfo, status: "invalid_invoice_number", invoiceNumber: r.invoiceNumber,
           });
           continue;
         }
       }
- 
+
       const userEnrollments = enrollmentsByUser.get(user._id.toString()) || [];
- 
       if (userEnrollments.length === 0) {
         preview.push({ email: r.email, user: userInfo, status: "no_enrollment", enrollmentOptions: [] });
         continue;
       }
- 
+
       const enrollmentOptions = userEnrollments.map((e) => {
         const existingInv = invoicedEnrollmentMap.get(e._id.toString());
         return {
@@ -3657,28 +3803,27 @@ exports.previewBulkInvoice = async (req, res) => {
           existingInvoiceNumber: existingInv?.invoiceNumber || null,
         };
       });
- 
+
       const availableOptions = enrollmentOptions.filter((o) => !o.hasInvoice);
- 
       if (availableOptions.length === 0) {
-        // ✅ is user ki SAARI enrollments already invoiced hain
         preview.push({ email: r.email, user: userInfo, status: "duplicate", enrollmentOptions });
         continue;
       }
- 
+
       preview.push({
         email: r.email,
         user: userInfo,
         status: "eligible",
         enrollmentOptions,
-        defaultSelectedIds: availableOptions.map((o) => o.enrollmentId), // ✅ sab available default-checked
+        defaultSelectedIds: availableOptions.map((o) => o.enrollmentId),
         dueDate: r.dueDate,
         issueDate: r.issueDate,
         invoiceNumber: r.invoiceNumber || undefined,
-        advanceAmount: r.advanceAmount || 0,
+        advance: r.advance,           // { amount, dueDate, description, paidDate } | null
+        installments: r.installments, // [{ number, amount, dueDate, description, paidDate }]
       });
     }
- 
+
     res.status(200).json({
       success: true,
       totalRows: uniqueRows.length,
@@ -3693,27 +3838,32 @@ exports.previewBulkInvoice = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
- 
+
 // ─────────────────────────────────────────────────────────
-// STEP 2: CONFIRM — actual invoice creation
-// Payload: [{ user, invoiceNumber?, dueDate?, issueDate?, advanceAmount?, items: [{enrollmentId, programId, programName, amount, discount}] }]
-// Har row = EK invoice. Agar items.length > 1 → bundle invoice (jaisa aapka createInvoice bundle handle karta hai).
+// STEP 2: CONFIRM — actual invoice + installments creation
+// Payload: [{
+//   user, invoiceNumber?, dueDate?, issueDate?,
+//   items: [{enrollmentId, programId, programName, amount, discount}],
+//   advance?: { amount, dueDate, description, paidDate, paid },
+//   installments?: [{ amount, dueDate, description, paidDate, paid }]
+// }]
+// "paid: true" wali installments ke liye Payment record + journal banega.
+// "paid: false" wali installments invoice mein PENDING reh jayengi, payment module mein NAHI jayengi.
 // ─────────────────────────────────────────────────────────
 exports.confirmBulkInvoice = async (req, res) => {
   try {
     const { invoices } = req.body;
- 
+
     if (!Array.isArray(invoices) || invoices.length === 0) {
       return res.status(400).json({ success: false, message: "invoices array is required" });
     }
- 
-    // ── Invoice number baseline — bilkul same logic jo generateInvoiceNumber mein hai ──
+
     const STARTING_POINT = 2090;
     const existingNumeric = await Invoice.find({ invoiceNumber: { $regex: /^\d+$/ } })
       .select("invoiceNumber").lean();
     const leadsWithInvoices = await Lead.find({ "paymentPlan.invoiceNumber": { $regex: /^\d+$/ } })
       .select("paymentPlan.invoiceNumber").lean();
- 
+
     let runningMax = existingNumeric.reduce((max, inv) => {
       const num = parseInt(inv.invoiceNumber, 10);
       return num > max ? num : max;
@@ -3722,19 +3872,18 @@ exports.confirmBulkInvoice = async (req, res) => {
       const num = parseInt(lead.paymentPlan?.invoiceNumber, 10);
       return !isNaN(num) && num > max ? num : max;
     }, runningMax);
- 
+
     const created = [];
     const skipped = [];
- 
+
     for (const row of invoices) {
-      const { user, invoiceNumber, dueDate, issueDate, advanceAmount, items } = row;
- 
+      const { user, invoiceNumber, dueDate, issueDate, items, advance, installments } = row;
+
       if (!user || !Array.isArray(items) || items.length === 0) {
         skipped.push({ user, reason: "Missing user or items" });
         continue;
       }
- 
-      // ── Race-condition safe check: koi bhi selected enrollment already invoiced to nahi? ──
+
       const enrollmentIds = items.map((it) => it.enrollmentId);
       const alreadyInvoiced = await Invoice.findOne({
         enrollment: { $in: enrollmentIds },
@@ -3744,8 +3893,7 @@ exports.confirmBulkInvoice = async (req, res) => {
         skipped.push({ user, reason: "One or more selected enrollments already invoiced" });
         continue;
       }
- 
-      // ── Invoice number resolve karo (Excel wala use karo, warna auto-generate) ──
+
       let finalInvoiceNumber = invoiceNumber;
       if (finalInvoiceNumber) {
         const taken = await invoiceNumberExists(finalInvoiceNumber);
@@ -3762,52 +3910,80 @@ exports.confirmBulkInvoice = async (req, res) => {
         }
         finalInvoiceNumber = candidate;
       }
- 
+
       const invoiceDate = issueDate ? new Date(issueDate) : new Date();
       const isBundle = items.length > 1;
- 
-      // ── Har item ka net amount (amount - discount) nikalo ──
+
       const netItems = items.map((it) => ({
         ...it,
         netAmount: Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)),
       }));
       const totalAmount = netItems.reduce((sum, it) => sum + it.netAmount, 0);
- 
+
       if (totalAmount <= 0) {
         skipped.push({ user, reason: "Total amount is zero — check amounts/discounts" });
         continue;
       }
- 
-      // ── Advance amount se installments banao (agar diya gaya ho) ──
-      let installments = [];
-      const advance = Number(advanceAmount || 0);
-      if (advance > 0 && advance < totalAmount) {
-        installments = [
-          {
-            label: "Advance",
-            amount: advance,
-            isAdvance: true,
-            feeType: "program",
-            status: "PENDING",
-            paidAmount: 0,
-            dueDate: dueDate ? new Date(dueDate) : null,
-          },
-          {
-            label: "Remaining Balance",
-            amount: totalAmount - advance,
-            isAdvance: false,
-            feeType: "program",
-            status: "PENDING",
-            paidAmount: 0,
-            dueDate: dueDate ? new Date(dueDate) : null,
-          },
-        ];
+
+      // ── Installments array banao (advance + numbered installments) ──
+      // "paid: false" wali entries invoice mein PENDING reh jayengi, koi Payment record nahi banega
+      const installmentDocs = [];
+      const paidEntriesForJournal = []; // { amount, method, paidAt, label } — baad mein Payment+journal ke liye
+
+      if (advance && advance.amount > 0) {
+        const isPaid = !!advance.paid;
+        installmentDocs.push({
+          label: advance.description || "Advance Payment",
+          amount: advance.amount,
+          dueDate: advance.dueDate ? new Date(advance.dueDate) : null,
+          isAdvance: true,
+          feeType: "program",
+          status: isPaid ? "PAID" : "PENDING",
+          paidAmount: isPaid ? advance.amount : 0,
+          paidAt: isPaid && advance.paidDate ? new Date(advance.paidDate) : null,
+        });
+        if (isPaid) {
+          paidEntriesForJournal.push({
+            amount: advance.amount,
+            paidAt: advance.paidDate ? new Date(advance.paidDate) : new Date(),
+            label: advance.description || "Advance Payment",
+            installmentIndex: installmentDocs.length - 1,
+          });
+        }
       }
- 
+
+      (installments || []).forEach((inst) => {
+        if (!inst.amount || inst.amount <= 0) return;
+        const isPaid = !!inst.paid;
+        installmentDocs.push({
+          label: inst.description || "Installment",
+          amount: inst.amount,
+          dueDate: inst.dueDate ? new Date(inst.dueDate) : null,
+          isAdvance: false,
+          feeType: "program",
+          status: isPaid ? "PAID" : "PENDING",
+          paidAmount: isPaid ? inst.amount : 0,
+          paidAt: isPaid && inst.paidDate ? new Date(inst.paidDate) : null,
+        });
+        if (isPaid) {
+          paidEntriesForJournal.push({
+            amount: inst.amount,
+            paidAt: inst.paidDate ? new Date(inst.paidDate) : new Date(),
+            label: inst.description || "Installment",
+            installmentIndex: installmentDocs.length - 1,
+          });
+        }
+      });
+
+      const paidAmount = installmentDocs.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
+      const remainingAmount = Math.max(0, totalAmount - paidAmount);
+      const invoiceStatus =
+        remainingAmount === 0 && paidAmount > 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "PENDING";
+
       const invoice = await Invoice.create({
         invoiceNumber: finalInvoiceNumber,
         user,
-        enrollment: netItems[0].enrollmentId, // primary enrollment (bundle ke liye bhi required)
+        enrollment: netItems[0].enrollmentId,
         isBundle,
         enrollments: isBundle ? netItems.map((it) => it.enrollmentId) : undefined,
         items: isBundle
@@ -3820,20 +3996,22 @@ exports.confirmBulkInvoice = async (req, res) => {
             }))
           : undefined,
         totalAmount,
-        remainingAmount: totalAmount,
+        paidAmount,
+        remainingAmount,
+        status: invoiceStatus,
         dueDate: dueDate || null,
         issueDate: invoiceDate,
-        installments,
+        installments: installmentDocs,
       });
- 
+
       if (isBundle) {
         await Enrollment.updateMany(
           { _id: { $in: netItems.map((it) => it.enrollmentId) } },
           { invoice: invoice._id }
         );
       }
- 
-      // ✅ Bilkul wahi journal function jo normal single invoice creation mein use hota hai
+
+      // ✅ Invoice creation journal — AR + Income, bilkul normal single-invoice flow jaisa
       await postInvoiceJournal({
         amount: totalAmount,
         invoiceId: invoice._id,
@@ -3841,7 +4019,39 @@ exports.confirmBulkInvoice = async (req, res) => {
         description: `Invoice ${finalInvoiceNumber} created (bulk import)${isBundle ? " — bundle" : ""}`,
         date: invoiceDate,
       });
- 
+
+      // ✅ Jo installments "paid" mark hui thin — unke liye Payment record + payment journal
+      for (const entry of paidEntriesForJournal) {
+        const payment = await Payment.create({
+          invoice: invoice._id,
+          enrollment: invoice.enrollment,
+          user,
+          amount: entry.amount,
+          method: "manual",
+          status: "approved",
+          approvedBy: req.user._id,
+          approvedAt: new Date(),
+          receivedBy: req.user._id,
+          paidAt: entry.paidAt,
+          notes: `${entry.label} — migrated via bulk import`,
+        });
+
+        invoice.installments[entry.installmentIndex].paymentId = payment._id;
+
+        await postPaymentJournal({
+          amount: entry.amount,
+          method: "manual",
+          paymentId: payment._id,
+          userId: req.user._id,
+          description: `${entry.label} — ${invoice.invoiceNumber} (bulk import)`,
+          date: entry.paidAt,
+        });
+      }
+
+      if (paidEntriesForJournal.length > 0) {
+        await invoice.save(); // paymentId links save karo
+      }
+
       await logAudit({
         req,
         action: "INVOICE_CREATED",
@@ -3849,10 +4059,10 @@ exports.confirmBulkInvoice = async (req, res) => {
         targetId: invoice._id,
         after: invoice.toObject(),
       });
- 
+
       created.push(invoice);
     }
- 
+
     res.status(201).json({
       success: true,
       createdCount: created.length,

@@ -75,6 +75,14 @@ const journalEntrySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+
+    // ✅ NAYA — ye entry kis student/user (invoice/payment owner) ke against hai
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     entryType: {
       type: String,
       enum: ["auto", "manual"],
@@ -98,6 +106,7 @@ const journalEntrySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // ✅ ye wahi hai jo entry banane wale STAFF/ADMIN ko refer karta hai (req.user._id) — user field se alag rakha
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -110,24 +119,10 @@ const journalEntrySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ No DB query — timestamp + random suffix
-// journalEntrySchema.pre("save", function (next) {
-//   if (!this.entryNumber) {
-//     this.entryNumber = generateUniqueNumber("JE");
-//   }
-//   if (!this.period?.month) {
-//     const d = this.date || new Date();
-//     this.period = {
-//       month: d.getMonth() + 1,
-//       year:  d.getFullYear(),
-//     };
-//   }
-//   next();
-// });
-
 journalEntrySchema.index({ sourceType: 1, sourceRef: 1 });
 journalEntrySchema.index({ "period.year": 1, "period.month": 1 });
 journalEntrySchema.index({ status: 1 });
 journalEntrySchema.index({ date: -1 });
+journalEntrySchema.index({ user: 1 }); // ✅ per-student journal query fast karne ke liye
 
 module.exports = mongoose.model("JournalEntry", journalEntrySchema);
