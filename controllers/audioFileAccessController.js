@@ -3,6 +3,7 @@ const AudioFileAccess = require("../models/audioFileAccessModel");
 const Enrollment = require("../models/enrollmentModel");
 const Program = require("../models/programModel");
 const User = require("../models/userModel");
+const Batch = require("../models/batchModel");
 const bcrypt = require("bcryptjs");
 const sendEmailDynamic = require("../utils/sendEmailDynamic");
 
