@@ -1,9 +1,9 @@
 const User = require("../models/userModel.js");
 
 const assignLeadManager = async () => {
-  // Sirf active + available sales managers
+  // Active + available Sales Managers aur Admins
   const managers = await User.find({
-    role: "sales_manager",
+    role: { $in: ["sales_manager", "admin"] },
     isActive: true,
     isAvailableForLead: true,
   }).sort({ lastLeadAssignedAt: 1 });
@@ -12,10 +12,9 @@ const assignLeadManager = async () => {
     return null;
   }
 
-  // Sabse purana assigned manager
+  // Round-robin: sabse pehle jis ko sabse pehle lead mili thi
   const manager = managers[0];
 
-  // Update assignment time
   manager.lastLeadAssignedAt = new Date();
   await manager.save();
 
