@@ -157,38 +157,60 @@ const JournalEntry = require("../models/journalEntryModel.js");
 const Account = require("../models/accountModel.js");
 const generateUniqueNumber = require("./generateUniqueNumber.js");
 
-// exports.postInvoiceJournal = async ({
-
 exports.postInvoiceJournal = async ({
-  amount, invoiceId, userId, description, session, date
+  amount, discountAmount = 0, invoiceId, userId, description, session, date
 }) => {
   const receivableAccount = await Account.findOne({ code: "1100", isActive: true }).session(session);
   const incomeAccount = await Account.findOne({ code: "4001", isActive: true }).session(session);
+  const discountAccount = discountAmount > 0
+    ? await Account.findOne({ code: "4004", isActive: true }).session(session)  // 👈 naya — sirf discount ho to fetch karo
+    : null;
 
   if (!receivableAccount || !incomeAccount) {
     console.warn("postInvoiceJournal: accounts not found — seed first");
     return null;
   }
 
+  if (discountAmount > 0 && !discountAccount) {
+    console.warn("postInvoiceJournal: discount account (4004) not found — seed first");
+    return null;
+  }
+
   const entryDate = date || new Date();
   const isNegative = amount < 0;
   const absAmount = Math.abs(amount);
-
+  const absDiscount = Math.abs(discountAmount);
+  const netAmount = absAmount - absDiscount;   // 👈 receivable sirf net amount ka banega
 
   if (absAmount === 0) return null;
+
+  // ── Lines banate waqt discount ho to teen lines, warna do lines ──
+  let lines;
+
+  if (isNegative) {
+    // Amount reversal/correction ke case mein discount ko involve nahi karte — as-is rakha
+    lines = [
+      { account: incomeAccount._id, type: "debit", amount: absAmount, description: "Tuition fee income decreased" },
+      { account: receivableAccount._id, type: "credit", amount: absAmount, description: "Student fee receivable decreased" },
+    ];
+  } else if (absDiscount > 0) {
+    // 👈 naya — discount wali invoice creation
+    lines = [
+      { account: receivableAccount._id, type: "debit", amount: netAmount, description: "Student fee receivable (net of discount)" },
+      { account: discountAccount._id, type: "debit", amount: absDiscount, description: "Discount given" },
+      { account: incomeAccount._id, type: "credit", amount: absAmount, description: "Tuition fee income recognized (gross)" },
+    ];
+  } else {
+    lines = [
+      { account: receivableAccount._id, type: "debit", amount: absAmount, description: "Student fee receivable" },
+      { account: incomeAccount._id, type: "credit", amount: absAmount, description: "Tuition fee income recognized" },
+    ];
+  }
 
   const entryData = {
     description: description || "Invoice created",
     date: entryDate,
-    lines: isNegative
-      ? [
-        { account: incomeAccount._id, type: "debit", amount: absAmount, description: "Tuition fee income decreased" },
-        { account: receivableAccount._id, type: "credit", amount: absAmount, description: "Student fee receivable decreased" },
-      ]
-      : [
-        { account: receivableAccount._id, type: "debit", amount: absAmount, description: "Student fee receivable" },
-        { account: incomeAccount._id, type: "credit", amount: absAmount, description: "Tuition fee income recognized" },
-      ],
+    lines,
     sourceType: "invoice",
     sourceRef: invoiceId,
     entryType: "auto",
@@ -215,25 +237,23 @@ exports.postInvoiceJournal = async ({
   if (isNegative) {
     receivableAccount.currentBalance -= absAmount;
     incomeAccount.currentBalance -= absAmount;
+  } else if (absDiscount > 0) {
+    receivableAccount.currentBalance += netAmount;      // 👈 AR sirf net se badhta hai
+    incomeAccount.currentBalance += absAmount;           // 👈 Income gross se badhta hai
+    discountAccount.currentBalance += absDiscount;       // 👈 Discount account bhi badhta hai (contra-income)
   } else {
     receivableAccount.currentBalance += absAmount;
     incomeAccount.currentBalance += absAmount;
   }
 
-  console.log("Receivable After:", receivableAccount.currentBalance);
-  console.log("Income After:", incomeAccount.currentBalance);
-
-  console.log("Skipping JournalEntry.create()");
-  console.log("Skipping Account.save()");
-
-  // return null;
-
   if (session) {
     await receivableAccount.save({ session });
     await incomeAccount.save({ session });
+    if (discountAccount) await discountAccount.save({ session });
   } else {
     await receivableAccount.save();
     await incomeAccount.save();
+    if (discountAccount) await discountAccount.save();
   }
 
   return entry[0];

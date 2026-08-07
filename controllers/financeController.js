@@ -106,7 +106,7 @@ exports.createInvoice = async (req, res) => {
   try {
     const {
       user, enrollment, enrollments, items,
-      totalAmount, dueDate, installments, invoiceNumber, issueDate,
+      totalAmount, discountAmount = 0, dueDate, installments, invoiceNumber, issueDate,
     } = req.body;
 
     const isBundle = Array.isArray(enrollments) && enrollments.length > 1;
@@ -133,7 +133,11 @@ exports.createInvoice = async (req, res) => {
     }
 
     // createInvoice ke andar, "exists" check already hai — bas isko duplicate-message clearer bana do
-    
+
+    const grossAmount = Number(totalAmount);
+    const discount = Number(discountAmount);
+    const netAmount = grossAmount - discount;
+
 
     const invoiceDate = issueDate ? new Date(issueDate) : new Date();
 
@@ -144,7 +148,9 @@ exports.createInvoice = async (req, res) => {
       isBundle,
       enrollments: isBundle ? enrollments : undefined,
       items: isBundle ? items : undefined,
-      totalAmount,
+      totalAmount: grossAmount,
+      discountAmount: discount,
+      remainingAmount: netAmount,
       remainingAmount: totalAmount,
       dueDate,
       issueDate: invoiceDate,
@@ -194,11 +200,13 @@ exports.createInvoice = async (req, res) => {
     }
 
     await postInvoiceJournal({
-      amount: totalAmount,
+      amount: grossAmount,
+      discountAmount: discount,
       invoiceId: invoice._id,
       userId: req.user._id,
-      description: `Invoice ${finalInvoiceNumber} created${isBundle ? " (bundle)" : ""}`,
-      date: invoiceDate,
+      description: `Invoice ${invoice.invoiceNumber}`,
+      date: invoice.issueDate,
+      session,
     });
 
     await logAudit({
@@ -262,9 +270,9 @@ exports.getAllInvoices = async (req, res) => {
     // }
 
     if (dateFrom || dateTo) {
-      filter.dueDate = {};
-      if (dateFrom) filter.dueDate.$gte = new Date(dateFrom + "T00:00:00.000Z");
-      if (dateTo) filter.dueDate.$lte = new Date(dateTo + "T23:59:59.999Z");
+      filter.issueDate = {};
+      if (dateFrom) filter.issueDate.$gte = new Date(dateFrom + "T00:00:00.000Z");
+      if (dateTo) filter.issueDate.$lte = new Date(dateTo + "T23:59:59.999Z");
     }
 
     // Search by student name or email (populate ke baad filter nahi hota, isliye lookup use karenge)
@@ -276,8 +284,15 @@ exports.getAllInvoices = async (req, res) => {
           { email: { $regex: search, $options: "i" } },
         ],
       }).select("_id");
-      userIds = matchedUsers.map((u) => u._id);
-      filter.user = { $in: userIds };
+      const userIds = matchedUsers.map((u) => u._id);
+
+      const searchOr = [
+        { invoiceNumber: { $regex: search, $options: "i" } },
+        { user: { $in: userIds } },
+      ];
+
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: searchOr });
     }
 
     // const invoices = await Invoice.find(filter)
@@ -818,7 +833,7 @@ exports.updateInstallment = async (req, res) => {
 exports.addInstallment = async (req, res) => {
   try {
     const { invoiceId } = req.params;
-    const { label, amount, dueDate, isAdvance, feeType } = req.body;
+    const { label, amount, dueDate, isAdvance, feeType, date } = req.body;
 
     if (!label || amount === undefined)
       return res.status(400).json({ success: false, message: "label and amount are required" });
@@ -830,6 +845,7 @@ exports.addInstallment = async (req, res) => {
 
     const before = invoice.toObject();
     const numAmount = Number(amount);
+    const entryDate = date ? new Date(date) : new Date();
 
     const isExtraFee = feeType === "certificate" || feeType === "manual";
 
@@ -878,6 +894,7 @@ exports.addInstallment = async (req, res) => {
           invoiceId: invoice._id,
           userId: req.user._id,
           description: `${label} added to invoice ${invoice.invoiceNumber}`,
+          date: entryDate,
         });
       } catch (journalErr) {
         console.error("postInvoiceJournal failed:", journalErr.message);
@@ -956,6 +973,7 @@ exports.updateInvoice = async (req, res) => {
     const beforeObj = before.toObject();
     const oldTotal = before.totalAmount;
     const newTotal = req.body.totalAmount !== undefined ? Number(req.body.totalAmount) : oldTotal;
+    const correctionDate = req.body.date ? new Date(req.body.date) : new Date();
 
     Object.assign(before, req.body);
     before.remainingAmount = Math.max(0, before.totalAmount - (before.paidAmount || 0));
@@ -976,6 +994,7 @@ exports.updateInvoice = async (req, res) => {
         invoiceId: before._id,
         userId: req.user._id,
         description: `Invoice ${before.invoiceNumber} amount corrected to ${newTotal}`,
+        date: correctionDate,
         session, // 👈 postInvoiceJournal ko bhi session accept karna hoga
       });
     }
@@ -2066,12 +2085,14 @@ exports.addPayment = async (req, res) => {
 //   }
 // };
 // GET ALL PAYMENTS (with filters)
+// GET ALL PAYMENTS (with filters)
 exports.getAllPayments = async (req, res) => {
   try {
     const {
       status,
       method,
       userId,
+      search,
       dateFrom,
       dateTo,
       page = 1,
@@ -2082,6 +2103,17 @@ exports.getAllPayments = async (req, res) => {
     if (status) filter.status = status;
     if (method) filter.method = method;
     if (userId) filter.user = userId;
+
+    // 👇 naya — Student name/email se search (getAllInvoices jaisa pattern)
+    if (search) {
+      const matchedUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ],
+      }).select("_id");
+      filter.user = { $in: matchedUsers.map((u) => u._id) };
+    }
 
     // Date filter runs on paidAt (not createdAt)
     if (dateFrom || dateTo) {
@@ -2096,7 +2128,7 @@ exports.getAllPayments = async (req, res) => {
 
     const payments = await Payment.find(filter)
       .populate("user", "name email")
-      .populate("invoice", "totalAmount status")
+      .populate("invoice", "totalAmount status invoiceNumber")
       .populate("enrollment")
       .populate("receivedBy", "name")
       .populate("approvedBy", "name")
@@ -2388,12 +2420,20 @@ exports.getRevenueReport = async (req, res) => {
       {
         $group: {
           _id: null,
-          totalRevenue: { $sum: "$totalAmount" },
-          totalCollected: { $sum: "$paidAmount" },
-          totalPending: { $sum: "$remainingAmount" },
           totalInvoices: { $sum: 1 },
-        },
-      },
+          grossRevenue: { $sum: "$totalAmount" },
+          totalDiscount: { $sum: "$discountAmount" },
+          netRevenue: {
+            $sum: {
+              $subtract: [
+                "$totalAmount",
+                { $ifNull: ["$discountAmount", 0] }
+              ]
+            }
+          },
+          totalCollected: { $sum: "$paidAmount" },
+        }
+      }
     ]);
 
     const byStatus = await Invoice.aggregate([
@@ -3720,11 +3760,11 @@ exports.previewBulkInvoice = async (req, res) => {
         invoiceNumber,
         advance: advanceAmount > 0
           ? {
-              amount: advanceAmount,
-              dueDate: resolveDueDate(dueDate, advancePaidDate),
-              description: advanceDescription,
-              paidDate: advancePaidDate,
-            }
+            amount: advanceAmount,
+            dueDate: resolveDueDate(dueDate, advancePaidDate),
+            description: advanceDescription,
+            paidDate: advancePaidDate,
+          }
           : null,
         installments,
       });
@@ -3914,14 +3954,22 @@ exports.confirmBulkInvoice = async (req, res) => {
       const invoiceDate = issueDate ? new Date(issueDate) : new Date();
       const isBundle = items.length > 1;
 
-      const netItems = items.map((it) => ({
+      const grossItems = items.map((it) => ({
         ...it,
+        amount: Number(it.amount || 0),
+        discount: Number(it.discount || 0),
         netAmount: Math.max(0, Number(it.amount || 0) - Number(it.discount || 0)),
       }));
-      const totalAmount = netItems.reduce((sum, it) => sum + it.netAmount, 0);
 
-      if (totalAmount <= 0) {
-        skipped.push({ user, reason: "Total amount is zero — check amounts/discounts" });
+      const totalAmount = grossItems.reduce((sum, it) => sum + it.amount, 0); // Gross
+      const discountAmount = grossItems.reduce((sum, it) => sum + it.discount, 0);
+      const netAmount = totalAmount - discountAmount;
+
+      if (netAmount <= 0) {
+        skipped.push({
+          user,
+          reason: "Total amount is zero — check amounts/discounts",
+        });
         continue;
       }
 
@@ -3976,26 +4024,29 @@ exports.confirmBulkInvoice = async (req, res) => {
       });
 
       const paidAmount = installmentDocs.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
-      const remainingAmount = Math.max(0, totalAmount - paidAmount);
+      const remainingAmount = Math.max(0, netAmount - paidAmount);
       const invoiceStatus =
         remainingAmount === 0 && paidAmount > 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "PENDING";
 
       const invoice = await Invoice.create({
         invoiceNumber: finalInvoiceNumber,
         user,
-        enrollment: netItems[0].enrollmentId,
         isBundle,
-        enrollments: isBundle ? netItems.map((it) => it.enrollmentId) : undefined,
+        enrollment: grossItems[0].enrollmentId,
+        enrollments: isBundle ? grossItems.map((it) => it.enrollmentId) : undefined,
+
         items: isBundle
-          ? netItems.map((it) => ({
-              program: it.programId || undefined,
-              programName: it.programName,
-              enrollment: it.enrollmentId,
-              amount: it.netAmount,
-              feeType: "program",
-            }))
+          ? grossItems.map((it) => ({
+            program: it.programId || undefined,
+            programName: it.programName,
+            enrollment: it.enrollmentId,
+            amount: it.amount,
+            discountAmount: it.discount,     // Agar item schema me field hai
+            feeType: "program",
+          }))
           : undefined,
         totalAmount,
+        discountAmount,
         paidAmount,
         remainingAmount,
         status: invoiceStatus,
@@ -4006,14 +4057,15 @@ exports.confirmBulkInvoice = async (req, res) => {
 
       if (isBundle) {
         await Enrollment.updateMany(
-          { _id: { $in: netItems.map((it) => it.enrollmentId) } },
+          { _id: { $in: grossItems.map((it) => it.enrollmentId) } },
           { invoice: invoice._id }
         );
       }
 
       // ✅ Invoice creation journal — AR + Income, bilkul normal single-invoice flow jaisa
       await postInvoiceJournal({
-        amount: totalAmount,
+        amount: netAmount,
+        discountAmount,
         invoiceId: invoice._id,
         userId: req.user._id,
         description: `Invoice ${finalInvoiceNumber} created (bulk import)${isBundle ? " — bundle" : ""}`,
@@ -4068,6 +4120,204 @@ exports.confirmBulkInvoice = async (req, res) => {
       createdCount: created.length,
       skippedCount: skipped.length,
       created,
+      skipped,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────
+// BULK DISCOUNT CORRECTION — Excel se invoices ki gross/discount fix karo
+// Expected headers: "Invoice Number", "Discount Amount", "Reason" (optional)
+// ─────────────────────────────────────────────────────────
+
+function buildDiscountHeaderMap(worksheet) {
+  const headerRow = worksheet.getRow(1);
+  const map = {};
+  headerRow.eachCell((cell, colNumber) => {
+    const text = String(cell.value || "").trim().toLowerCase();
+    if (text === "invoice number") map.invoiceNumber = colNumber;
+    else if (text === "discount amount") map.discountAmount = colNumber;
+    else if (text === "reason") map.reason = colNumber;
+  });
+  return map;
+}
+
+// ── STEP 1: PREVIEW ──────────────────────────────────────
+exports.previewBulkDiscount = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Excel file is required" });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+
+    const headerMap = buildDiscountHeaderMap(worksheet);
+    if (!headerMap.invoiceNumber || !headerMap.discountAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "'Invoice Number' and 'Discount Amount' columns required in header row",
+      });
+    }
+
+    const rows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const invoiceNumber = cellText(row, headerMap.invoiceNumber);
+      const discountAmount = cellNumber(row, headerMap.discountAmount);
+      const reason = cellText(row, headerMap.reason) || "";
+      if (!invoiceNumber || discountAmount <= 0) return;
+      rows.push({ invoiceNumber, discountAmount, reason });
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid rows found" });
+    }
+
+    const preview = [];
+    for (const r of rows) {
+      const invoice = await Invoice.findOne({ invoiceNumber: r.invoiceNumber })
+        .populate("user", "name email");
+
+      if (!invoice) {
+        preview.push({ ...r, status: "not_found" });
+        continue;
+      }
+      if ((invoice.discountAmount || 0) > 0) {
+        preview.push({ ...r, status: "already_has_discount", existingDiscount: invoice.discountAmount });
+        continue;
+      }
+      if (r.discountAmount >= invoice.totalAmount) {
+        preview.push({ ...r, status: "invalid_discount", currentTotal: invoice.totalAmount });
+        continue;
+      }
+
+      preview.push({
+        ...r,
+        status: "eligible",
+        invoiceId: invoice._id,
+        studentName: invoice.user?.name,
+        studentEmail: invoice.user?.email,
+        currentNetAmount: invoice.totalAmount,
+        newGrossAmount: invoice.totalAmount + r.discountAmount,
+        paidAmount: invoice.paidAmount || 0,
+        remainingAmount: invoice.remainingAmount || 0,   // unchanged
+        issueDate: invoice.issueDate,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      totalRows: rows.length,
+      eligibleCount: preview.filter((p) => p.status === "eligible").length,
+      preview,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ── STEP 2: CONFIRM — reverse purani journal, gross+discount set karo, nayi journal issueDate pe post karo ──
+exports.confirmBulkDiscount = async (req, res) => {
+  try {
+    const { rows } = req.body; // [{ invoiceId, discountAmount, reason }]
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, message: "rows array is required" });
+    }
+
+    const corrected = [];
+    const skipped = [];
+
+    for (const r of rows) {
+      const session = await mongoose.startSession();
+      session.startTransaction();
+
+      try {
+        const invoice = await Invoice.findById(r.invoiceId).session(session);
+        if (!invoice) {
+          skipped.push({ invoiceId: r.invoiceId, reason: "Invoice not found" });
+          await session.abortTransaction();
+          session.endSession();
+          continue;
+        }
+        if ((invoice.discountAmount || 0) > 0) {
+          skipped.push({ invoiceId: r.invoiceId, reason: "Discount already applied" });
+          await session.abortTransaction();
+          session.endSession();
+          continue;
+        }
+
+        const discountAmount = Number(r.discountAmount);
+        const oldNetAmount = invoice.totalAmount;
+        const newGrossAmount = oldNetAmount + discountAmount;
+        const issueDate = invoice.issueDate; // 👈 create ke waqt jo date thi, wahi journal pe use hogi
+
+        // ── Step 1: Purani (net-as-gross) journal entry reverse karo ──
+        const reversed = await reverseJournalEntry({
+          sourceType: "invoice",
+          sourceRef: invoice._id,
+          userId: req.user._id,
+          description: `Reversal — invoice ${invoice.invoiceNumber} discount correction`,
+          session,
+        });
+
+        if (!reversed.length) {
+          skipped.push({ invoiceId: r.invoiceId, reason: "No posted journal entry found to reverse" });
+          await session.abortTransaction();
+          session.endSession();
+          continue;
+        }
+
+        // ── Step 2: Invoice ko gross + discount se update karo (remainingAmount same rehta hai) ──
+        invoice.totalAmount = newGrossAmount;
+        invoice.discountAmount = discountAmount;
+        await invoice.save({ session });
+
+        // ── Step 3: Nayi 3-line journal entry issueDate pe post karo ──
+        await postInvoiceJournal({
+          amount: newGrossAmount,
+          discountAmount,
+          invoiceId: invoice._id,
+          userId: req.user._id,
+          description: `Invoice ${invoice.invoiceNumber} corrected — discount applied${r.reason ? `: ${r.reason}` : ""}`,
+          date: issueDate,   // 👈 aaj ki date nahi, invoice ki issueDate
+          session,
+        });
+
+        await logAudit({
+          req,
+          action: "INVOICE_DISCOUNT_APPLIED",
+          module: "finance",
+          targetId: invoice._id,
+          before: { totalAmount: oldNetAmount, discountAmount: 0 },
+          after: { totalAmount: newGrossAmount, discountAmount },
+        });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        corrected.push({
+          invoiceNumber: invoice.invoiceNumber,
+          oldNetAmount,
+          newGrossAmount,
+          discountAmount,
+        });
+      } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+        skipped.push({ invoiceId: r.invoiceId, reason: err.message });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      correctedCount: corrected.length,
+      skippedCount: skipped.length,
+      corrected,
       skipped,
     });
   } catch (error) {

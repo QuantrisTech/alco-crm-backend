@@ -5,6 +5,7 @@ const Invoice = require("../models/invoiceModel.js");
 const Payment = require("../models/paymentModel.js");
 const Expense = require("../models/expenseModel.js");
 const Enrollment = require("../models/enrollmentModel.js");
+const { buildBalanceSheetPDF, buildProfitLossPDF } = require("../utils/pdfReportGenerator.js");
 
 // ─── Helper: date range from query ───────────────────────────
 const getDateRange = (query) => {
@@ -18,7 +19,7 @@ const getDateRange = (query) => {
   // Default: current year
   return {
     from: new Date(`${year}-01-01T00:00:00.000Z`),
-    to:   new Date(`${year}-12-31T23:59:59.999Z`),
+    to: new Date(`${year}-12-31T23:59:59.999Z`),
   };
 };
 
@@ -48,17 +49,17 @@ exports.getProfitLoss = async (req, res) => {
         const key = acc._id.toString();
         if (!accountTotals[key]) {
           accountTotals[key] = {
-            _id:     acc._id,
-            code:    acc.code,
-            name:    acc.name,
-            type:    acc.type,
+            _id: acc._id,
+            code: acc.code,
+            name: acc.name,
+            type: acc.type,
             subType: acc.subType,
-            debit:   0,
-            credit:  0,
+            debit: 0,
+            credit: 0,
           };
         }
 
-        if (line.type === "debit")  accountTotals[key].debit  += line.amount;
+        if (line.type === "debit") accountTotals[key].debit += line.amount;
         if (line.type === "credit") accountTotals[key].credit += line.amount;
       }
     }
@@ -77,9 +78,9 @@ exports.getProfitLoss = async (req, res) => {
       .map(a => ({ ...a, amount: a.debit - a.credit }))
       .sort((a, b) => a.code.localeCompare(b.code));
 
-    const totalIncome   = incomeLines.reduce((s, a) => s + a.amount, 0);
+    const totalIncome = incomeLines.reduce((s, a) => s + a.amount, 0);
     const totalExpenses = expenseLines.reduce((s, a) => s + a.amount, 0);
-    const netProfit     = totalIncome - totalExpenses;
+    const netProfit = totalIncome - totalExpenses;
 
     // Monthly breakdown for chart
     const monthlyData = await Payment.aggregate([
@@ -107,7 +108,7 @@ exports.getProfitLoss = async (req, res) => {
       },
       {
         $group: {
-          _id:           { month: { $month: "$date" } },
+          _id: { month: { $month: "$date" } },
           totalExpenses: { $sum: "$amount" },
         },
       },
@@ -118,33 +119,27 @@ exports.getProfitLoss = async (req, res) => {
       const inc = monthlyData.find(m => m._id.month === i + 1);
       const exp = monthlyExpenses.find(m => m._id.month === i + 1);
       return {
-        month:     i + 1,
+        month: i + 1,
         monthName: new Date(2000, i, 1).toLocaleString("default", { month: "short" }),
-        income:    inc?.totalCollected || 0,
-        expenses:  exp?.totalExpenses  || 0,
-        profit:    (inc?.totalCollected || 0) - (exp?.totalExpenses || 0),
+        income: inc?.totalCollected || 0,
+        expenses: exp?.totalExpenses || 0,
+        profit: (inc?.totalCollected || 0) - (exp?.totalExpenses || 0),
       };
     });
 
-    res.json({
-      success: true,
-      data: {
-        period: { from, to },
-        income: {
-          lines:       incomeLines,
-          total:       totalIncome,
-        },
-        expenses: {
-          lines:       expenseLines,
-          total:       totalExpenses,
-        },
-        netProfit,
-        profitMargin: totalIncome > 0
-          ? ((netProfit / totalIncome) * 100).toFixed(2)
-          : "0.00",
-        monthlyBreakdown: months,
-      },
-    });
+    const profitLossData = {  
+      period: { from, to },
+      income: { lines: incomeLines, total: totalIncome },
+      expenses: { lines: expenseLines, total: totalExpenses },
+      netProfit,
+      profitMargin: totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(2) : "0.00",
+      monthlyBreakdown: months,
+    };
+
+    if (req.query.format === "pdf") {
+      return buildProfitLossPDF(res, profitLossData, req.query.mode);
+    }
+    res.json({ success: true, data: profitLossData });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -154,75 +149,76 @@ exports.getProfitLoss = async (req, res) => {
 // 2. BALANCE SHEET
 // GET /api/v1/reports/balance-sheet
 // ─────────────────────────────────────────────────────────────
+// controllers/reportController.js — getBalanceSheet ke andar
+
 exports.getBalanceSheet = async (req, res) => {
   try {
-    // Balance sheet is at a point in time (default: today)
     const asOf = req.query.asOf ? new Date(req.query.asOf) : new Date();
 
-    // Get all accounts with their current balances
-    const accounts = await Account.find({ isActive: true })
-      .sort({ code: 1 });
+    const accounts = await Account.find({ isActive: true }).sort({ code: 1 });
 
-    const assetAccounts     = accounts.filter(a => a.type === "asset");
+    const assetAccounts = accounts.filter(a => a.type === "asset");
     const liabilityAccounts = accounts.filter(a => a.type === "liability");
-    const equityAccounts    = accounts.filter(a => a.type === "equity");
+    const equityAccounts = accounts.filter(
+      a => a.type === "equity" && a.subType !== "retained_earnings"
+    );
 
-    const totalAssets      = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    const totalAssets = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
     const totalLiabilities = liabilityAccounts.reduce((s, a) => s + a.currentBalance, 0);
-    const totalEquity      = equityAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    const totalEquity = equityAccounts.reduce((s, a) => s + a.currentBalance, 0);
 
-    // Retained earnings = Total Income - Total Expenses (from journal)
-    const incomeAccounts  = accounts.filter(a => a.type === "income");
+    const incomeAccounts = accounts.filter(a => a.type === "income");
     const expenseAccounts = accounts.filter(a => a.type === "expense");
-    const retainedEarnings =
+
+    // ✅ FIX: system ke andar hui activity (current period, since go-live)
+    const currentPeriodNetIncome =
       incomeAccounts.reduce((s, a) => s + a.currentBalance, 0) -
       expenseAccounts.reduce((s, a) => s + a.currentBalance, 0);
 
+    // ✅ FIX: 3002 account ka apna currentBalance ab "opening/historical retained earnings"
+    // store karega — ek dafa manual journal entry se seed hoga (QBO se migrate karte waqt)
+    const retainedEarningsAccount = accounts.find(a => a.subType === "retained_earnings");
+    const openingRetainedEarnings = retainedEarningsAccount?.currentBalance || 0;
+
+    // ✅ Total retained earnings = historical (QBO se) + current period (system ke andar)
+    const retainedEarnings = openingRetainedEarnings + currentPeriodNetIncome;
+
     const totalLiabilitiesAndEquity = totalLiabilities + totalEquity + retainedEarnings;
 
-    res.json({
-      success: true,
-      data: {
-        asOf,
-        assets: {
-          lines: assetAccounts.map(a => ({
-            code:    a.code,
-            name:    a.name,
-            subType: a.subType,
-            balance: a.currentBalance,
-          })),
-          total: totalAssets,
-        },
-        liabilities: {
-          lines: liabilityAccounts.map(a => ({
-            code:    a.code,
-            name:    a.name,
-            subType: a.subType,
-            balance: a.currentBalance,
-          })),
-          total: totalLiabilities,
-        },
-        equity: {
-          lines: [
-            ...equityAccounts.map(a => ({
-              code:    a.code,
-              name:    a.name,
-              subType: a.subType,
-              balance: a.currentBalance,
-            })),
-            {
-              code:    "RE",
-              name:    "Retained Earnings (Current Period)",
-              subType: "retained_earnings",
-              balance: retainedEarnings,
-            },
-          ],
-          total: totalEquity + retainedEarnings,
-        },
-        totalLiabilitiesAndEquity,
-        isBalanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
+    const balanceSheetData = {
+      asOf,
+      assets: {
+        lines: assetAccounts.map(a => ({ code: a.code, name: a.name, subType: a.subType, balance: a.currentBalance })),
+        total: totalAssets,
       },
-    });
+      liabilities: {
+        lines: liabilityAccounts.map(a => ({ code: a.code, name: a.name, subType: a.subType, balance: a.currentBalance })),
+        total: totalLiabilities,
+      },
+      equity: {
+        lines: [
+          ...equityAccounts.map(a => ({ code: a.code, name: a.name, subType: a.subType, balance: a.currentBalance })),
+          {
+            code: retainedEarningsAccount?.code || "3002",
+            name: "Retained Earnings",
+            subType: "retained_earnings",
+            balance: retainedEarnings,
+            // breakdown transparency ke liye — chahen to PDF mein ye bhi dikha sakte hain
+            openingBalance: openingRetainedEarnings,
+            currentPeriodNetIncome,
+          },
+        ],
+        total: totalEquity + retainedEarnings,
+      },
+      totalLiabilitiesAndEquity,
+      isBalanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
+    };
+
+    if (req.query.format === "pdf") {
+      return buildBalanceSheetPDF(res, balanceSheetData, req.query.mode);
+    }
+
+    res.json({ success: true, data: balanceSheetData });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -249,11 +245,11 @@ exports.getARAgingReport = async (req, res) => {
 
     // Bucket each invoice
     const buckets = {
-      current:  { label: "Current (not yet due)", invoices: [], total: 0 },
-      days_30:  { label: "1 - 30 days",           invoices: [], total: 0 },
-      days_60:  { label: "31 - 60 days",          invoices: [], total: 0 },
-      days_90:  { label: "61 - 90 days",          invoices: [], total: 0 },
-      days_90p: { label: "90+ days",              invoices: [], total: 0 },
+      current: { label: "Current (not yet due)", invoices: [], total: 0 },
+      days_30: { label: "1 - 30 days", invoices: [], total: 0 },
+      days_60: { label: "31 - 60 days", invoices: [], total: 0 },
+      days_90: { label: "61 - 90 days", invoices: [], total: 0 },
+      days_90p: { label: "90+ days", invoices: [], total: 0 },
     };
 
     for (const inv of invoices) {
@@ -266,22 +262,22 @@ exports.getARAgingReport = async (req, res) => {
 
       const row = {
         invoiceNumber: inv.invoiceNumber,
-        studentName:   inv.user?.name,
-        studentEmail:  inv.user?.email,
-        program:       inv.enrollment?.program?.name || "—",
-        dueDate:       inv.dueDate,
-        daysOverdue:   Math.max(0, daysOverdue),
-        totalAmount:   inv.totalAmount,
-        paidAmount:    inv.paidAmount || 0,
+        studentName: inv.user?.name,
+        studentEmail: inv.user?.email,
+        program: inv.enrollment?.program?.name || "—",
+        dueDate: inv.dueDate,
+        daysOverdue: Math.max(0, daysOverdue),
+        totalAmount: inv.totalAmount,
+        paidAmount: inv.paidAmount || 0,
         outstanding,
-        status:        inv.status,
+        status: inv.status,
       };
 
-      if (daysOverdue <= 0)       { buckets.current.invoices.push(row);  buckets.current.total  += outstanding; }
-      else if (daysOverdue <= 30) { buckets.days_30.invoices.push(row);  buckets.days_30.total  += outstanding; }
-      else if (daysOverdue <= 60) { buckets.days_60.invoices.push(row);  buckets.days_60.total  += outstanding; }
-      else if (daysOverdue <= 90) { buckets.days_90.invoices.push(row);  buckets.days_90.total  += outstanding; }
-      else                        { buckets.days_90p.invoices.push(row); buckets.days_90p.total += outstanding; }
+      if (daysOverdue <= 0) { buckets.current.invoices.push(row); buckets.current.total += outstanding; }
+      else if (daysOverdue <= 30) { buckets.days_30.invoices.push(row); buckets.days_30.total += outstanding; }
+      else if (daysOverdue <= 60) { buckets.days_60.invoices.push(row); buckets.days_60.total += outstanding; }
+      else if (daysOverdue <= 90) { buckets.days_90.invoices.push(row); buckets.days_90.total += outstanding; }
+      else { buckets.days_90p.invoices.push(row); buckets.days_90p.total += outstanding; }
     }
 
     const grandTotal = Object.values(buckets).reduce((s, b) => s + b.total, 0);
@@ -294,9 +290,9 @@ exports.getARAgingReport = async (req, res) => {
         grandTotal,
         summary: Object.entries(buckets).map(([key, b]) => ({
           key,
-          label:   b.label,
-          count:   b.invoices.length,
-          total:   b.total,
+          label: b.label,
+          count: b.invoices.length,
+          total: b.total,
           percent: grandTotal > 0
             ? ((b.total / grandTotal) * 100).toFixed(1)
             : "0.0",
@@ -327,9 +323,9 @@ exports.getCashFlowReport = async (req, res) => {
       },
       {
         $group: {
-          _id:    "$method",
-          total:  { $sum: "$amount" },
-          count:  { $sum: 1 },
+          _id: "$method",
+          total: { $sum: "$amount" },
+          count: { $sum: 1 },
         },
       },
     ]);
@@ -346,7 +342,7 @@ exports.getCashFlowReport = async (req, res) => {
       },
       {
         $group: {
-          _id:   "$category",
+          _id: "$category",
           total: { $sum: "$amount" },
           count: { $sum: 1 },
         },
@@ -354,7 +350,7 @@ exports.getCashFlowReport = async (req, res) => {
     ]);
 
     const totalCashOut = expensesOut.reduce((s, e) => s + e.total, 0);
-    const netCashFlow  = totalCashIn - totalCashOut;
+    const netCashFlow = totalCashIn - totalCashOut;
 
     // ── Monthly cash flow for chart ───────────────────────────
     const monthlyIn = await Payment.aggregate([
@@ -373,11 +369,11 @@ exports.getCashFlowReport = async (req, res) => {
       const inc = monthlyIn.find(m => m._id.month === i + 1);
       const exp = monthlyOut.find(m => m._id.month === i + 1);
       return {
-        month:     i + 1,
+        month: i + 1,
         monthName: new Date(2000, i, 1).toLocaleString("default", { month: "short" }),
-        cashIn:    inc?.total || 0,
-        cashOut:   exp?.total || 0,
-        net:       (inc?.total || 0) - (exp?.total || 0),
+        cashIn: inc?.total || 0,
+        cashOut: exp?.total || 0,
+        net: (inc?.total || 0) - (exp?.total || 0),
       };
     });
 
@@ -397,15 +393,15 @@ exports.getCashFlowReport = async (req, res) => {
             lines: paymentsIn.map(p => ({
               method: p._id,
               amount: p.total,
-              count:  p.count,
+              count: p.count,
             })),
             total: totalCashIn,
           },
           cashOut: {
             lines: expensesOut.map(e => ({
               category: e._id,
-              amount:   e.total,
-              count:    e.count,
+              amount: e.total,
+              count: e.count,
             })),
             total: totalCashOut,
           },
@@ -441,26 +437,26 @@ exports.getRevenueByProgram = async (req, res) => {
       },
       {
         $lookup: {
-          from:         "enrollments",
-          localField:   "enrollment",
+          from: "enrollments",
+          localField: "enrollment",
           foreignField: "_id",
-          as:           "enrollmentData",
+          as: "enrollmentData",
         },
       },
       { $unwind: "$enrollmentData" },
       {
         $lookup: {
-          from:         "programs",
-          localField:   "enrollmentData.program",
+          from: "programs",
+          localField: "enrollmentData.program",
           foreignField: "_id",
-          as:           "programData",
+          as: "programData",
         },
       },
       { $unwind: { path: "$programData", preserveNullAndEmptyArrays: true } },
       {
         $group: {
-          _id:          "$programData._id",
-          programName:  { $first: "$programData.name" },
+          _id: "$programData._id",
+          programName: { $first: "$programData.name" },
           totalRevenue: { $sum: "$amount" },
           paymentCount: { $sum: 1 },
         },
@@ -475,11 +471,11 @@ exports.getRevenueByProgram = async (req, res) => {
       data: {
         period: { from, to },
         programs: result.map(r => ({
-          programId:    r._id,
-          programName:  r.programName || "Unknown",
+          programId: r._id,
+          programName: r.programName || "Unknown",
           totalRevenue: r.totalRevenue,
           paymentCount: r.paymentCount,
-          percent:      grandTotal > 0
+          percent: grandTotal > 0
             ? ((r.totalRevenue / grandTotal) * 100).toFixed(1)
             : "0.0",
         })),

@@ -32,6 +32,7 @@ const DEFAULT_ACCOUNTS = [
   { code: "4001", name: "Tuition Fee Income", type: "income", subType: "tuition_fee", isSystem: true },
   { code: "4002", name: "Registration Fee", type: "income", subType: "registration_fee", isSystem: true },
   { code: "4003", name: "Other Income", type: "income", subType: "other_income", isSystem: false },
+  { code: "4004", name: "Discounts & Allowances", type: "income", subType: "other_income", isSystem: false },
 
   // ── EXPENSES ─────────────────────────────────────────────────
   { code: "5001", name: "Salaries & Wages", type: "expense", subType: "salary", isSystem: true },
@@ -40,6 +41,13 @@ const DEFAULT_ACCOUNTS = [
   { code: "5004", name: "Office Rent", type: "expense", subType: "rent", isSystem: false },
   { code: "5005", name: "Software & Tools", type: "expense", subType: "software", isSystem: false },
   { code: "5006", name: "Other Expenses", type: "expense", subType: "other_expense", isSystem: false },
+  { code: "5007", name: "Charity / Donations", type: "expense", subType: "donations_charity", isSystem: false },
+  { code: "5008", name: "Bank Charges & Fees", type: "expense", subType: "bank_charges_fees", isSystem: false },
+  { code: "5009", name: "Security Expense", type: "expense", subType: "security_expense", isSystem: false },
+  { code: "5010", name: "Printing & Stationery", type: "expense", subType: "printing_stationery", isSystem: false },
+  { code: "5011", name: "Office Supplies / Expense", type: "expense", subType: "office_supplies_expenses", isSystem: false },
+  { code: "5012", name: "Telephone & Internet", type: "expense", subType: "telephone_internet", isSystem: false },
+  { code: "2101", name: "Withholding Tax Payable", type: "liability", subType: "taxes_withholding_tax", isSystem: true },
 ];
 
 // POST /api/v1/accounts/seed
@@ -712,12 +720,14 @@ exports.approveExpense = async (req, res) => {
 
     const before = expense.toObject();
 
-    // Find cash/bank account to credit
-    const cashAccount = await Account.findOne({ code: "1001", isActive: true }).session(session);
+    // ✅ FIX: paymentMethod ke mutabiq sahi source account choose karo
+    // cash → 1001 (Cash in Hand), baaki sab (bank/cheque/online) → 1002 (Bank Account HBL)
+    const sourceAccountCode = expense.paymentMethod === "cash" ? "1001" : "1002";
+    const sourceAccount = await Account.findOne({ code: sourceAccountCode, isActive: true }).session(session);
     const expenseAccount = await Account.findById(expense.account).session(session);
 
-    if (!cashAccount || !expenseAccount)
-      return res.status(400).json({ success: false, message: "Cash or expense account not found" });
+    if (!sourceAccount || !expenseAccount)
+      return res.status(400).json({ success: false, message: `Source account (${sourceAccountCode}) or expense account not found` });
 
     // Auto-post journal entry:
     // DEBIT  Expense Account  (increases expense)
@@ -740,14 +750,14 @@ exports.approveExpense = async (req, res) => {
       date: expense.date,
       lines: [
         { account: expenseAccount._id, type: "debit", amount: expense.amount, description: expense.title },
-        { account: cashAccount._id, type: "credit", amount: expense.amount, description: expense.title },
+        { account: sourceAccount._id, type: "credit", amount: expense.amount, description: expense.title },
       ],
       sourceType: "expense",
       sourceRef: expense._id,
       entryType: "auto",
       status: "posted",
       createdBy: req.user._id,
-      entryNumber: generateUniqueNumber("JE"),  // ✅ yeh add karo
+      entryNumber: generateUniqueNumber("JE"),
       period: {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
@@ -756,9 +766,9 @@ exports.approveExpense = async (req, res) => {
 
     // Update balances
     expenseAccount.currentBalance += expense.amount;
-    cashAccount.currentBalance -= expense.amount;
+    sourceAccount.currentBalance -= expense.amount;
     await expenseAccount.save({ session });
-    await cashAccount.save({ session });
+    await sourceAccount.save({ session });
 
     // Update expense status
     expense.status = "approved";
@@ -826,13 +836,42 @@ exports.getAccountsDashboard = async (req, res) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Total income accounts balance
+    // const incomeAccounts = await Account.find({ type: "income", isActive: true });
+    // const expenseAccounts = await Account.find({ type: "expense", isActive: true });
+    // const assetAccounts = await Account.find({ type: "asset", isActive: true });
+
+    // const totalIncome = incomeAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    // const totalExpenses = expenseAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    // const totalAssets = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    // const netProfit = totalIncome - totalExpenses;
+
     const incomeAccounts = await Account.find({ type: "income", isActive: true });
     const expenseAccounts = await Account.find({ type: "expense", isActive: true });
     const assetAccounts = await Account.find({ type: "asset", isActive: true });
 
-    const totalIncome = incomeAccounts.reduce((s, a) => s + a.currentBalance, 0);
-    const totalExpenses = expenseAccounts.reduce((s, a) => s + a.currentBalance, 0);
-    const totalAssets = assetAccounts.reduce((s, a) => s + a.currentBalance, 0);
+    // Gross Income (4004 ke ilawa)
+    const grossIncome = incomeAccounts
+      .filter(a => a.code !== "4004")
+      .reduce((sum, a) => sum + a.currentBalance, 0);
+
+    // Discounts
+    const discounts = incomeAccounts
+      .filter(a => a.code === "4004")
+      .reduce((sum, a) => sum + a.currentBalance, 0);
+
+    // Net Income
+    const totalIncome = grossIncome - discounts;
+
+    const totalExpenses = expenseAccounts.reduce(
+      (sum, a) => sum + a.currentBalance,
+      0
+    );
+
+    const totalAssets = assetAccounts.reduce(
+      (sum, a) => sum + a.currentBalance,
+      0
+    );
+
     const netProfit = totalIncome - totalExpenses;
 
     // This month's journal entries
@@ -848,9 +887,25 @@ exports.getAccountsDashboard = async (req, res) => {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
 
+    // res.json({
+    //   success: true,
+    //   data: {
+    //     totalIncome,
+    //     totalExpenses,
+    //     totalAssets,
+    //     netProfit,
+    //     monthlyJournalEntries: monthlyEntries,
+    //     pendingExpenses: {
+    //       count: pendingExpenses,
+    //       amount: pendingExpenseAmount[0]?.total || 0,
+    //     },
+    //   },
+    // });
     res.json({
       success: true,
       data: {
+        grossIncome,
+        discounts,
         totalIncome,
         totalExpenses,
         totalAssets,

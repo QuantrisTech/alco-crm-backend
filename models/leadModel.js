@@ -125,7 +125,7 @@ const leadSchema = new mongoose.Schema(
       totalAmount: Number,
       certificateFee: { type: Number, default: 0 },
       manualFee: { type: Number, default: 0 },
-      discount: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
       advanceAmount: Number,
       advanceDueDate: Date,
       installments: [

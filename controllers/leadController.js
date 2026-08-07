@@ -13,7 +13,7 @@ const Lead = require("../models/leadModel.js");
 const Batch = require("../models/batchModel");
 const Certificate = require("../models/certificateModel.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
-const { postInvoiceJournal } = require("../utils/postPaymentJournal.js");
+const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const sendPaymentPlanInvoiceEmail = require("../utils/sendPaymentPlanInvoiceEmail.js");
 
 
@@ -228,17 +228,148 @@ const verifyTurnstile = async (token) => {
 // };
 // --------------------24/4/2026--------------------
 // CREATE LEAD (from lead form)
+// exports.createLead = async (req, res) => {
+//     try {
+//         const isHuman = await verifyTurnstile(req.body.turnstileToken);
+//         if (!isHuman) {
+//             return res.status(400).json({ message: "Security check failed. Please try again." });
+//         }
+
+//         const email = req.body.email?.toLowerCase().trim();
+//         const { first_name, last_name, program_id, opportunity_value: _, ...rest } = req.body;
+
+//         if (!email || !first_name || !program_id) {
+//             return res.status(400).json({
+//                 message: "Email, first name and program are required",
+//             });
+//         }
+
+//         // ── Auto opportunity_value from program price ──────────
+//         let opportunity_value = 0;
+//         if (program_id) {
+//             const program = await Program.findById(program_id).select("price");
+//             if (program?.price) opportunity_value = program.price;
+//         }
+
+//         // ── Base lead data ─────────────────────────────────────
+//         const leadData = {
+//             first_name,
+//             last_name,
+//             program_id,
+//             ...rest,
+//             email,
+//             opportunity_value,
+//             created_by: req.user?.id || null,
+//         };
+
+//         const assignedManager = await assignLeadManager();
+
+//         // ── Step 1: Existing user check ────────────────────────
+//         const existingUser = await User.findOne({ email });
+
+//         if (existingUser) {
+//             // Same program check
+//             const existingLead = await Lead.findOne({ email, program_id });
+
+//             if (existingLead) {
+//                 return res.status(200).json({
+//                     success: true,
+//                     duplicate: true,
+//                     message: "Thank you for your interest! We already have your application and will contact you soon. 😊",
+//                 });
+//             }
+
+//             // ✅ Existing user, new program → sirf lead banao, user mat banao
+//             const lead = await Lead.create({
+//                 ...leadData,
+//                 user_id: existingUser._id,
+//                 assigned_to: assignedManager,
+//             });
+
+//             return res.status(201).json({
+//                 success: true,
+//                 duplicate: false,
+//                 message: "Thank you for applying! We'll be in touch soon. 😊",
+//                 data: lead,
+//             });
+//         }
+
+//         // ── Step 2: Naya user banao ────────────────────────────
+//         const plainPassword = Math.random().toString(36).slice(-8);
+//         const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+//         const newUser = await User.create({
+//             name: `${first_name} ${last_name || ""}`.trim(),
+//             email,
+//             phone: rest.phone || null,
+//             password: hashedPassword,
+//             role: "user",
+//             isVerified: true,
+//             isActive: true,
+//             avatarColor: generateColor(email),
+//             isTemporaryPassword: true,
+//         });
+
+//         // ── Step 3: Lead banao ─────────────────────────────────
+//         const lead = await Lead.create({
+//             ...leadData,
+//             user_id: newUser._id,
+//             assigned_to: assignedManager,
+//         });
+
+//         // ── Step 4: Credentials email bhejo ───────────────────
+//         await sendEmailDynamic({
+//             to: email,
+//             subject: "Your Account Credentials 🔑",
+//             templateName: "send-user-credentials",
+//             replacements: {
+//                 UserName: `${first_name} ${last_name || ""}`,
+//                 UserEmail: email,
+//                 UserPassword: plainPassword,
+//                 SupportEmail: "alco@support.com",
+//                 YourCompanyName: "Al-and-co",
+//                 LoginLink: `https://app.arslanlarik.com/auth?email=${email}&password=${plainPassword}`,
+//             },
+//         });
+
+//         return res.status(201).json({
+//             success: true,
+//             duplicate: false,
+//             message: "Thank you for applying! Check your email for login details. 😊",
+//             data: lead,
+//         });
+
+//     } catch (error) {
+//         if (error.code === 11000) {
+//             return res.status(200).json({
+//                 success: true,
+//                 duplicate: true,
+//                 message: "Thank you! We already have your details. 😊",
+//             });
+//         }
+//         res.status(500).json({ message: error.message });
+//     }
+// };
 exports.createLead = async (req, res) => {
     try {
+        console.log("========== CREATE LEAD ==========");
+        console.log("Incoming body:", JSON.stringify(req.body, null, 2));
+
         const isHuman = await verifyTurnstile(req.body.turnstileToken);
+        console.log("Turnstile verified:", isHuman);
+
         if (!isHuman) {
+            console.log("❌ Turnstile failed — aborting");
             return res.status(400).json({ message: "Security check failed. Please try again." });
         }
 
         const email = req.body.email?.toLowerCase().trim();
         const { first_name, last_name, program_id, opportunity_value: _, ...rest } = req.body;
 
+        console.log("Parsed:", { email, first_name, last_name, program_id });
+
         if (!email || !first_name || !program_id) {
+            console.log("❌ Missing required fields");
             return res.status(400).json({
                 message: "Email, first name and program are required",
             });
@@ -248,8 +379,10 @@ exports.createLead = async (req, res) => {
         let opportunity_value = 0;
         if (program_id) {
             const program = await Program.findById(program_id).select("price");
+            console.log("Program fetched:", program ? { _id: program._id, price: program.price } : null);
             if (program?.price) opportunity_value = program.price;
         }
+        console.log("opportunity_value set to:", opportunity_value);
 
         // ── Base lead data ─────────────────────────────────────
         const leadData = {
@@ -261,17 +394,22 @@ exports.createLead = async (req, res) => {
             opportunity_value,
             created_by: req.user?.id || null,
         };
+        console.log("leadData built:", JSON.stringify(leadData, null, 2));
 
         const assignedManager = await assignLeadManager();
+        console.log("Assigned manager:", assignedManager);
 
         // ── Step 1: Existing user check ────────────────────────
         const existingUser = await User.findOne({ email });
+        console.log("Existing user found:", existingUser ? { _id: existingUser._id, email: existingUser.email } : null);
 
         if (existingUser) {
             // Same program check
             const existingLead = await Lead.findOne({ email, program_id });
+            console.log("Existing lead (same email+program) found:", existingLead ? existingLead._id : null);
 
             if (existingLead) {
+                console.log("⚠️ Duplicate lead — no DB write, returning early");
                 return res.status(200).json({
                     success: true,
                     duplicate: true,
@@ -280,11 +418,19 @@ exports.createLead = async (req, res) => {
             }
 
             // ✅ Existing user, new program → sirf lead banao, user mat banao
+            console.log("Creating Lead for EXISTING user with data:", JSON.stringify({
+                ...leadData,
+                user_id: existingUser._id,
+                assigned_to: assignedManager,
+            }, null, 2));
+
             const lead = await Lead.create({
                 ...leadData,
                 user_id: existingUser._id,
                 assigned_to: assignedManager,
             });
+
+            console.log("✅ Lead created (DB committed):", lead._id);
 
             return res.status(201).json({
                 success: true,
@@ -297,6 +443,14 @@ exports.createLead = async (req, res) => {
         // ── Step 2: Naya user banao ────────────────────────────
         const plainPassword = Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
+        console.log("Generated temp password (plain, for testing only):", plainPassword);
+
+        console.log("Creating User with data:", JSON.stringify({
+            name: `${first_name} ${last_name || ""}`.trim(),
+            email,
+            phone: rest.phone || null,
+            role: "user",
+        }, null, 2));
 
         const newUser = await User.create({
             name: `${first_name} ${last_name || ""}`.trim(),
@@ -310,14 +464,26 @@ exports.createLead = async (req, res) => {
             isTemporaryPassword: true,
         });
 
+        console.log("✅ User created (DB committed):", newUser._id);
+
         // ── Step 3: Lead banao ─────────────────────────────────
+        console.log("Creating Lead for NEW user with data:", JSON.stringify({
+            ...leadData,
+            user_id: newUser._id,
+            assigned_to: assignedManager,
+        }, null, 2));
+
         const lead = await Lead.create({
             ...leadData,
             user_id: newUser._id,
             assigned_to: assignedManager,
         });
 
+        console.log("✅ Lead created (DB committed):", lead._id);
+
         // ── Step 4: Credentials email bhejo ───────────────────
+        console.log("Sending credentials email to:", email);
+
         await sendEmailDynamic({
             to: email,
             subject: "Your Account Credentials 🔑",
@@ -332,6 +498,9 @@ exports.createLead = async (req, res) => {
             },
         });
 
+        console.log("✅ Credentials email sent");
+        console.log("========== END CREATE LEAD ==========");
+
         return res.status(201).json({
             success: true,
             duplicate: false,
@@ -340,7 +509,11 @@ exports.createLead = async (req, res) => {
         });
 
     } catch (error) {
+        console.log("❌ ERROR in createLead:", error.message);
+        console.log(error.stack);
+
         if (error.code === 11000) {
+            console.log("⚠️ Duplicate key error (E11000) — likely email already exists");
             return res.status(200).json({
                 success: true,
                 duplicate: true,
@@ -1668,9 +1841,11 @@ exports.convertLead = async (req, res) => {
             status: "active",
             accessStatus: "RESTRICTED",
             assigned_to: lead.assigned_to,
+            audioAccess: false,
         });
 
         // ── Step 4.5: Batch count update karo ────────────────────
+        // ✅ SAHI — convertLead ke liye (koi transaction/session nahi hai is function mein)
         if (lead.batch_id) {
             await Batch.findOneAndUpdate(
                 { _id: lead.batch_id, students: { $ne: user._id } },
@@ -1713,6 +1888,7 @@ exports.convertLead = async (req, res) => {
             installments,
             certificateFee: certFee = 0,
             manualFee: manuFee = 0,
+            discountAmount: discAmount = 0,
         } = lead.paymentPlan;
 
         const programFee = totalAmount - certFee - manuFee;
@@ -1769,8 +1945,9 @@ exports.convertLead = async (req, res) => {
                 ...(certFee > 0 ? [{ program: lead.program_id, programName: `${program.name} — Certificate Fee`, enrollment: enrollment._id, amount: certFee, feeType: "certificate" }] : []),
                 ...(manuFee > 0 ? [{ program: lead.program_id, programName: `${program.name} — Manual Fee`, enrollment: enrollment._id, amount: manuFee, feeType: "manual" }] : []),
             ],
-            totalAmount,
-            remainingAmount: totalAmount,
+            totalAmount: totalAmount + discAmount,     // 👈 ab gross ban gaya
+            discountAmount: discAmount,                // 👈 naya
+            remainingAmount: totalAmount,               // net hi remaining rahega (discount already minus)
             paidAmount: 0,
             dueDate: advanceDueDate,
             issueDate: paymentPlanIssueDate,
@@ -1782,7 +1959,8 @@ exports.convertLead = async (req, res) => {
         // ✅ ADD THIS
         try {
             await postInvoiceJournal({
-                amount: totalAmount,
+                amount: totalAmount + discAmount,     // gross
+                discountAmount: discAmount,           // 👈 naya
                 invoiceId: invoice._id,
                 userId: req.user._id,
                 description: `Invoice ${invoiceNumber} — Lead converted`,
@@ -2033,6 +2211,7 @@ exports.convertLeadBundle = async (req, res) => {
                 status: "active",
                 accessStatus: "RESTRICTED",
                 assigned_to: lead.assigned_to,
+                audioAccess: false,
             });
             enrollments.push(enrollment);
 
@@ -2525,12 +2704,13 @@ exports.markInterested = async (req, res) => {
 
         // Payment plan agar bheja hai to save karo
         if (req.body.paymentPlan) {
-            const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, ...rest } = req.body.paymentPlan;
+            const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, discount = 0, ...rest } = req.body.paymentPlan;
 
             lead.paymentPlan = {
                 ...rest,
                 certificateFee,
                 manualFee,
+                discountAmount: discount,
                 totalAmount: (rest.totalAmount || 0) + certificateFee + manualFee,
                 invoiceNumber: invoiceNumber || undefined,
                 issueDate: issueDate ? new Date(issueDate) : new Date(),
@@ -2898,12 +3078,13 @@ exports.updatePaymentPlan = async (req, res) => {
         const lead = await Lead.findById(req.params.id);
         if (!lead) return res.status(404).json({ message: "Lead not found" });
 
-        const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, ...rest } = req.body;
+        const { invoiceNumber, issueDate, certificateFee = 0, manualFee = 0, discount = 0, ...rest } = req.body;
 
         lead.paymentPlan = {
             ...rest,
             certificateFee,
             manualFee,
+            discountAmount: discount,
             totalAmount: (rest.totalAmount || 0) + certificateFee + manualFee,
             invoiceNumber: invoiceNumber || lead.paymentPlan?.invoiceNumber || undefined,
             issueDate: issueDate ? new Date(issueDate) : (lead.paymentPlan?.issueDate || new Date()),

@@ -42,7 +42,9 @@ const {
   checkInvoiceNumber,
   generateInvoiceNumber,
   previewBulkInvoice,
-  confirmBulkInvoice
+  confirmBulkInvoice,
+  previewBulkDiscount,
+  confirmBulkDiscount,
 } = require("../controllers/financeController.js");
 
 // your existing JWT middleware
@@ -158,6 +160,9 @@ router.post(
   authorize("admin", "super_admin", "finance_manager"),
   confirmBulkInvoice
 );
+
+router.post("/invoices/bulk-discount/preview", protect, authorize("finance_manager", "admin", "super_admin"), uploadExcel.single("file"), previewBulkDiscount);
+router.post("/invoices/bulk-discount/confirm", protect, authorize("finance_manager", "admin", "super_admin"), confirmBulkDiscount);
 
 module.exports = router;
 

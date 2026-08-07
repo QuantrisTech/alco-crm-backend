@@ -9,6 +9,7 @@ const invoiceSchema = new mongoose.Schema(
     enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
 
     totalAmount: Number,
+    discountAmount: { type: Number, default: 0 },
     paidAmount: { type: Number, default: 0 },
     remainingAmount: Number,
 
@@ -19,7 +20,8 @@ const invoiceSchema = new mongoose.Schema(
       programName: String,
       enrollment: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
       amount: Number,
-      feeType: { type: String, enum: ["program", "certificate", "manual"], default: "program" }, 
+      discount: { type: Number, default: 0 },
+      feeType: { type: String, enum: ["program", "certificate", "manual"], default: "program" },
     }],
 
     status: {

@@ -620,31 +620,34 @@ exports.adminDeleteLesson = async (req, res) => {
 
 // GET /admin/v1/batches
 exports.adminGetBatches = async (req, res) => {
-    try {
-        const { program_id, status } = req.query;
+  try {
+    const { program_id, status } = req.query;
 
-        const query = {};
+    const query = {};
 
-        if (program_id) {
-            query.program_id = new mongoose.Types.ObjectId(program_id);
-        }
-
-        if (status) {
-            query.status = status;
-        }
-
-        const batches = await Batch.find(query)
-            .populate("program_id", "name slug")
-            .populate("instructor_id", "name email")
-            .sort({ start_date: 1 });
-
-        res.status(200).json({
-            success: true,
-            data: batches,
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    if (program_id) {
+      query.program_id = new mongoose.Types.ObjectId(program_id);
     }
+
+    if (status) {
+      query.status = status;
+    } else {
+      // default: active + upcoming
+      query.status = { $in: ["active", "upcoming"] };
+    }
+
+    const batches = await Batch.find(query)
+      .populate("program_id", "name slug")
+      .populate("instructor_id", "name email")
+      .sort({ start_date: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: batches,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // POST /admin/v1/batches
