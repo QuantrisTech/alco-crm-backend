@@ -28,7 +28,7 @@ const { uploadExcel } = require("../middlewares/uploadExcel.js");
 router.get("/my", protect, getMyEnrollments);
 
 // ADMIN
-router.post("/", protect, authorize("admin", "super_admin"), createEnrollment);
+router.post("/", protect, authorize("admin", "super_admin" , "finance_manager"), createEnrollment);
 
 router.post("/direct", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), createEnrollmentDirect);
 
@@ -40,13 +40,13 @@ router.get("/:id", protect, getEnrollmentById);
 
 router.put("/:id", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), updateEnrollment);
 
-router.delete("/:id", protect, authorize("admin", "super_admin"), deleteEnrollment);
+router.delete("/:id", protect, authorize("admin", "super_admin", "finance_manager"), deleteEnrollment);
 
-router.post("/:id/graduate", protect, authorize("admin", "super_admin"), graduateEnrollment);
+router.post("/:id/graduate", protect, authorize("admin", "super_admin" , "finance_manager"), graduateEnrollment);
 
-router.post("/:id/suspend", protect, authorize("admin", "super_admin"), suspendEnrollment);
+router.post("/:id/suspend", protect, authorize("admin", "super_admin" , "finance_manager"), suspendEnrollment);
 
-router.post("/:id/reactivate", protect, authorize("admin", "super_admin"), reactivateEnrollment);
+router.post("/:id/reactivate", protect, authorize("admin", "super_admin" , "finance_manager"), reactivateEnrollment);
 
 router.patch("/:id/assign", protect, authorize("admin", "super_admin", "sales_manager", "finance_manager"), assignEnrollment);
 
