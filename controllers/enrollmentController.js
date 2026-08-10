@@ -280,12 +280,13 @@ exports.getAllEnrollments = async (req, res) => {
     const limit = Number(req.query.limit) || 10;
 
     // const { search, status } = req.query;
-    const { search, status, assigned_to } = req.query;
+    const {search, status, assigned_to, accessStatus} = req.query;
 
     // Step 1: Enrollment level filter (status)
     const enrollmentFilter = {};
     if (status) enrollmentFilter.status = status;
     if (assigned_to) enrollmentFilter.assigned_to = assigned_to;
+    if (accessStatus) enrollmentFilter.accessStatus = accessStatus;
 
     // Step 2: Pehle sari matching enrollments fetch karo (populate ke saath)
     // const allEnrollments = await Enrollment.find(enrollmentFilter)

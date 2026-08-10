@@ -124,5 +124,6 @@ journalEntrySchema.index({ "period.year": 1, "period.month": 1 });
 journalEntrySchema.index({ status: 1 });
 journalEntrySchema.index({ date: -1 });
 journalEntrySchema.index({ user: 1 }); // ✅ per-student journal query fast karne ke liye
+journalEntrySchema.index({ description: 1 });
 
 module.exports = mongoose.model("JournalEntry", journalEntrySchema);

@@ -5,6 +5,7 @@ const Enrollment = require("../models/enrollmentModel.js");
 const Lead = require("../models/leadModel.js");
 const User = require("../models/userModel.js");
 const Batch = require("../models/batchModel");
+const Counter = require("../models/counterModel.js");
 const Certificate = require("../models/certificateModel.js");
 const { uploadToCloudinary } = require("../middlewares/uploadReceipt");
 const logAudit = require("../utils/auditLogger.js");
@@ -16,6 +17,7 @@ const jwt = require("jsonwebtoken");
 const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
 const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
+const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
 
 // ─────────────────────────────────────────────
 // INVOICE MANAGEMENT
@@ -103,6 +105,9 @@ const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 // };
 
 exports.createInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       user, enrollment, enrollments, items,
@@ -112,36 +117,35 @@ exports.createInvoice = async (req, res) => {
     const isBundle = Array.isArray(enrollments) && enrollments.length > 1;
 
     if (!user || !totalAmount) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: "user, totalAmount are required" });
     }
     if (!isBundle && !enrollment) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: "enrollment is required" });
     }
     if (isBundle && (!items || !items.length)) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: "items required for bundle invoice" });
     }
 
     let finalInvoiceNumber = invoiceNumber;
     if (!finalInvoiceNumber) {
-      const count = await Invoice.countDocuments();
-      finalInvoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+      finalInvoiceNumber = await reserveNextInvoiceNumber();
     } else {
-      const exists = await Invoice.findOne({ invoiceNumber: finalInvoiceNumber });
+      const exists = await invoiceNumberExists(finalInvoiceNumber);
       if (exists) {
+        await session.abortTransaction();
         return res.status(400).json({ success: false, message: `Invoice number ${finalInvoiceNumber} already exists` });
       }
     }
 
-    // createInvoice ke andar, "exists" check already hai — bas isko duplicate-message clearer bana do
-
     const grossAmount = Number(totalAmount);
     const discount = Number(discountAmount);
     const netAmount = grossAmount - discount;
-
-
     const invoiceDate = issueDate ? new Date(issueDate) : new Date();
 
-    const invoice = await Invoice.create({
+    const invoiceArr = await Invoice.create([{
       invoiceNumber: finalInvoiceNumber,
       user,
       enrollment: isBundle ? enrollments[0] : enrollment,
@@ -151,50 +155,49 @@ exports.createInvoice = async (req, res) => {
       totalAmount: grossAmount,
       discountAmount: discount,
       remainingAmount: netAmount,
-      remainingAmount: totalAmount,
       dueDate,
       issueDate: invoiceDate,
       installments: installments || [],
-    });
+    }], { session });
+    const invoice = invoiceArr[0];
 
     if (isBundle) {
       await Enrollment.updateMany(
         { _id: { $in: enrollments } },
-        { invoice: invoice._id }
+        { invoice: invoice._id },
+        { session }
       );
     }
 
-    // ── 👇 Naya: har certificate-fee item ke liye alag Certificate record banao ──
+    // ── Bundle certificate items ──
     const certItems = (items || []).filter((it) => it.feeType === "certificate");
     for (const it of certItems) {
-      const already = await Certificate.findOne({ enrollment: it.enrollment, program: it.program });
+      const already = await Certificate.findOne({ enrollment: it.enrollment, program: it.program }).session(session);
       if (!already) {
-        await Certificate.create({
-          user,
-          enrollment: it.enrollment,
-          program: it.program,
-          certificateFee: it.amount,
-          feePaid: false,
-          feeType: "certificate",
-          status: "locked",
-        });
+        await Certificate.create([{
+          user, enrollment: it.enrollment, program: it.program,
+          certificateFee: it.amount, feePaid: false, feeType: "certificate", status: "locked",
+        }], { session });
       }
     }
-    // agar single (non-bundle) invoice mein bhi certificate installment ho to wahan se bhi handle karo:
+
+    // ── Single invoice certificate installment ──
     if (!isBundle) {
       const singleCertInst = (installments || []).find((i) => i.feeType === "certificate");
       if (singleCertInst) {
-        const already = await Certificate.findOne({ enrollment, program: singleCertInst.program || undefined });
-        if (!already) {
-          await Certificate.create({
-            user,
-            enrollment,
-            program: singleCertInst.program,
-            certificateFee: singleCertInst.amount,
-            feePaid: false,
-            feeType: "certificate",
-            status: "locked",
-          });
+        let resolvedProgram = singleCertInst.program;
+        if (!resolvedProgram) {
+          const enrollmentDoc = await Enrollment.findById(enrollment).select("program").session(session);
+          resolvedProgram = enrollmentDoc?.program;
+        }
+        if (resolvedProgram) {
+          const already = await Certificate.findOne({ enrollment, program: resolvedProgram }).session(session);
+          if (!already) {
+            await Certificate.create([{
+              user, enrollment, program: resolvedProgram,
+              certificateFee: singleCertInst.amount, feePaid: false, feeType: "certificate", status: "locked",
+            }], { session });
+          }
         }
       }
     }
@@ -214,9 +217,13 @@ exports.createInvoice = async (req, res) => {
       targetId: invoice._id, after: invoice.toObject(),
     });
 
+    await session.commitTransaction();
     res.status(201).json({ success: true, data: invoice });
   } catch (err) {
+    await session.abortTransaction();
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -3484,18 +3491,18 @@ exports.searchEnrollments = async (req, res) => {
 // };
 
 // ── Helper: check invoiceNumber in BOTH Invoice collection AND Lead payment plans ──
-async function invoiceNumberExists(invoiceNumber) {
-  // 1) Check in Invoice collection
-  const invoiceExists = await Invoice.findOne({ invoiceNumber }).select("_id").lean();
-  if (invoiceExists) return true;
+// async function invoiceNumberExists(invoiceNumber) {
+//   // 1) Check in Invoice collection
+//   const invoiceExists = await Invoice.findOne({ invoiceNumber }).select("_id").lean();
+//   if (invoiceExists) return true;
 
-  // 2) Check in Lead's paymentPlan (top-level field, not per-installment)
-  const leadExists = await Lead.findOne({
-    "paymentPlan.invoiceNumber": invoiceNumber,   // ✅ FIXED PATH
-  }).select("_id").lean();
+//   // 2) Check in Lead's paymentPlan (top-level field, not per-installment)
+//   const leadExists = await Lead.findOne({
+//     "paymentPlan.invoiceNumber": invoiceNumber,   // ✅ FIXED PATH
+//   }).select("_id").lean();
 
-  return !!leadExists;
-}
+//   return !!leadExists;
+// }
 
 // ── CHECK invoice number uniqueness ──────────────────────────────
 exports.checkInvoiceNumber = async (req, res) => {
@@ -3515,42 +3522,35 @@ exports.checkInvoiceNumber = async (req, res) => {
 };
 
 // ── GENERATE next invoice number (starts after 2090) ─────────────
+// async function reserveNextInvoiceNumber() {
+//   let candidate;
+//   do {
+//     const counter = await Counter.findOneAndUpdate(
+//       { _id: "invoiceNumber" },
+//       { $inc: { seq: 1 } },
+//       { new: true, upsert: true }
+//     );
+//     candidate = String(counter.seq);
+//   } while (await invoiceNumberExists(candidate)); // legacy/manual numbers ke against safety check
+//   return candidate;
+// }
+
+exports.checkInvoiceNumber = async (req, res) => {
+  try {
+    const { invoiceNumber } = req.query;
+    if (!invoiceNumber?.trim())
+      return res.status(400).json({ success: false, message: "invoiceNumber required" });
+    const exists = await invoiceNumberExists(invoiceNumber.trim());
+    res.json({ success: true, available: !exists });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.generateInvoiceNumber = async (req, res) => {
   try {
-    const STARTING_POINT = 2090;
-
-    // Invoice collection se purely-numeric invoiceNumbers
-    const invoices = await Invoice.find({
-      invoiceNumber: { $regex: /^\d+$/ },
-    }).select("invoiceNumber").lean();
-
-    // ✅ FIXED — Lead.paymentPlan.invoiceNumber (top-level field) se numeric numbers
-    const leadsWithInvoices = await Lead.find({
-      "paymentPlan.invoiceNumber": { $regex: /^\d+$/ },
-    }).select("paymentPlan.invoiceNumber").lean();
-
-    let maxExisting = invoices.reduce((max, inv) => {
-      const num = parseInt(inv.invoiceNumber, 10);
-      return num > max ? num : max;
-    }, STARTING_POINT);
-
-    // ✅ Ab har lead ka ek hi paymentPlan.invoiceNumber hai — loop simple ho gaya
-    maxExisting = leadsWithInvoices.reduce((max, lead) => {
-      const num = parseInt(lead.paymentPlan?.invoiceNumber, 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, maxExisting);
-
-    const nextNumber = String(maxExisting + 1);
-
-    // Race-condition safety
-    let candidate = nextNumber;
-    let attempt = 0;
-    while (await invoiceNumberExists(candidate)) {
-      attempt += 1;
-      candidate = String(maxExisting + 1 + attempt);
-    }
-
-    res.json({ success: true, invoiceNumber: candidate });
+    const invoiceNumber = await reserveNextInvoiceNumber();
+    res.json({ success: true, invoiceNumber });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -3606,9 +3606,11 @@ function buildHeaderMap(worksheet) {
     const text = String(cell.value || "").trim().toLowerCase();
     if (!text) return;
 
+    // NAYA
     if (text === "name") map.name = colNumber;
     else if (text === "email") map.email = colNumber;
     else if (text === "amount") map.amount = colNumber;
+    else if (text === "discount" || text === "discount amount") map.discountAmount = colNumber;
     else if (text === "due date") map.dueDate = colNumber;
     else if (text === "issue date") map.issueDate = colNumber;
     else if (text === "invoice number") map.invoiceNumber = colNumber;
@@ -3727,7 +3729,9 @@ exports.previewBulkInvoice = async (req, res) => {
       const email = cellText(row, headerMap.email)?.toLowerCase();
       if (!email) return;
 
+      // NAYA
       const fallbackAmount = cellNumber(row, headerMap.amount);
+      const discountAmount = cellNumber(row, headerMap.discountAmount);
       const dueDate = cellDate(row, headerMap.dueDate);
       const issueDate = cellDate(row, headerMap.issueDate);
       const invoiceNumber = cellText(row, headerMap.invoiceNumber);
@@ -3752,9 +3756,11 @@ exports.previewBulkInvoice = async (req, res) => {
         })
         .filter((i) => i.amount > 0); // ✅ khaali installment slots skip karo
 
+      // PURANA — parsedRows.push()
       parsedRows.push({
         email,
         fallbackAmount,
+        discountAmount,
         dueDate,
         issueDate,
         invoiceNumber,
@@ -3859,6 +3865,7 @@ exports.previewBulkInvoice = async (req, res) => {
         dueDate: r.dueDate,
         issueDate: r.issueDate,
         invoiceNumber: r.invoiceNumber || undefined,
+        discountAmount: r.discountAmount || 0,
         advance: r.advance,           // { amount, dueDate, description, paidDate } | null
         installments: r.installments, // [{ number, amount, dueDate, description, paidDate }]
       });

@@ -323,11 +323,29 @@ exports.getAccountLedger = async (req, res) => {
 // GET /api/v1/accounts/journal
 exports.getAllJournalEntries = async (req, res) => {
   try {
-    const { sourceType, from, to, status, page = 1, limit = 20 } = req.query;
+
+    const {
+      search,
+      sourceType,
+      from,
+      to,
+      status,
+      page = 1,
+      limit = 20,
+    } = req.query;
 
     const filter = {};
+
+    if (search) {
+      filter.description = {
+        $regex: search,
+        $options: "i",
+      };
+    }
+
     if (sourceType) filter.sourceType = sourceType;
     if (status) filter.status = status;
+
     if (from || to) {
       filter.date = {};
       if (from) filter.date.$gte = new Date(from);

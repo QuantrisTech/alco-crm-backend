@@ -15,6 +15,7 @@ const Certificate = require("../models/certificateModel.js");
 const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const sendPaymentPlanInvoiceEmail = require("../utils/sendPaymentPlanInvoiceEmail.js");
+const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
 
 
 // Turnstile token verify utility
@@ -1865,19 +1866,29 @@ exports.convertLead = async (req, res) => {
         // ── Step 5: Invoice Number ────────────────────────────────
         const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
 
+        // PURANA (hatana hai):
+        // let invoiceNumber = lead.paymentPlan.invoiceNumber;
+        // if (invoiceNumber) {
+        //     const exists = await Invoice.findOne({ invoiceNumber });
+        //     if (exists) { return res.status(400)... }
+        // } else {
+        //     const count = await Invoice.countDocuments();
+        //     invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+        // }
+
+        // NAYA:
+        // NAYA
         let invoiceNumber = lead.paymentPlan.invoiceNumber;
         if (invoiceNumber) {
-            // 👇 NAYA — duplicate check
-            const exists = await Invoice.findOne({ invoiceNumber });
-            if (exists) {
+            const taken = await invoiceNumberExists(invoiceNumber, lead._id);   // 👈 apna lead exclude karo
+            if (taken) {
                 return res.status(400).json({
                     success: false,
                     message: `Invoice number ${invoiceNumber} already exists`,
                 });
             }
         } else {
-            const count = await Invoice.countDocuments();
-            invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+            invoiceNumber = await reserveNextInvoiceNumber();
         }
 
         // ── Step 6: certFee seedha paymentPlan se — checkbox se frontend ne bheja hoga ──
@@ -2235,19 +2246,18 @@ exports.convertLeadBundle = async (req, res) => {
         // }
         const paymentPlanIssueDate = lead.paymentPlan.issueDate ? new Date(lead.paymentPlan.issueDate) : new Date();
 
+        // NAYA
         let invoiceNumber = lead.paymentPlan.invoiceNumber;
         if (invoiceNumber) {
-            // 👇 NAYA — duplicate check
-            const exists = await Invoice.findOne({ invoiceNumber });
-            if (exists) {
+            const taken = await invoiceNumberExists(invoiceNumber, lead._id);   // 👈 shared helper use karo, apna lead exclude
+            if (taken) {
                 return res.status(400).json({
                     success: false,
                     message: `Invoice number ${invoiceNumber} already exists`,
                 });
             }
         } else {
-            const count = await Invoice.countDocuments();
-            invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+            invoiceNumber = await reserveNextInvoiceNumber();   // 👈 legacy count-based logic ki jagah shared helper
         }
 
         const { totalAmount, advanceAmount, advanceDueDate, installments } = lead.paymentPlan;
