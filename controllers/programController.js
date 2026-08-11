@@ -6,6 +6,7 @@ const Module = require("../models/moduleModel.js");
 const Lesson = require("../models/lessonModel.js");
 const Batch = require("../models/batchModel.js");
 const Enrollment = require("../models/enrollmentModel");
+const Invoice = require("../models/invoiceModel");
 
 // ═══════════════════════════════════════
 // PUBLIC ENDPOINTS
@@ -16,7 +17,7 @@ exports.getPrograms = async (req, res) => {
     try {
         const programs = await Program.find({ status: "active" })
             .select("-created_by")
-            .populate("total_students") 
+            .populate("total_students")
             .sort({ createdAt: 1 })   // ✅ ascending 
             .lean();
 
@@ -620,34 +621,34 @@ exports.adminDeleteLesson = async (req, res) => {
 
 // GET /admin/v1/batches
 exports.adminGetBatches = async (req, res) => {
-  try {
-    const { program_id, status } = req.query;
+    try {
+        const { program_id, status } = req.query;
 
-    const query = {};
+        const query = {};
 
-    if (program_id) {
-      query.program_id = new mongoose.Types.ObjectId(program_id);
+        if (program_id) {
+            query.program_id = new mongoose.Types.ObjectId(program_id);
+        }
+
+        if (status) {
+            query.status = status;
+        } else {
+            // default: active + upcoming
+            query.status = { $in: ["active", "upcoming"] };
+        }
+
+        const batches = await Batch.find(query)
+            .populate("program_id", "name slug")
+            .populate("instructor_id", "name email")
+            .sort({ start_date: 1 });
+
+        res.status(200).json({
+            success: true,
+            data: batches,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    if (status) {
-      query.status = status;
-    } else {
-      // default: active + upcoming
-      query.status = { $in: ["active", "upcoming"] };
-    }
-
-    const batches = await Batch.find(query)
-      .populate("program_id", "name slug")
-      .populate("instructor_id", "name email")
-      .sort({ start_date: 1 });
-
-    res.status(200).json({
-      success: true,
-      data: batches,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 // POST /admin/v1/batches
@@ -694,6 +695,43 @@ exports.adminGetBatchById = async (req, res) => {
             return res.status(404).json({ success: false, message: "Batch not found" });
         }
 
+        // Batch ke students ke enrollments
+        const enrollments = await Enrollment.find({
+            batch: batch._id,
+        }).select("_id user program");
+
+        const enrollmentIds = enrollments.map((e) => e._id);
+
+        // Batch ki invoices
+        const invoices = await Invoice.find({
+            enrollment: { $in: enrollmentIds },
+            status: { $ne: "CANCELLED" },
+        }).select("totalAmount discountAmount paidAmount remainingAmount");
+
+        const revenue = invoices.reduce(
+            (acc, invoice) => {
+                const gross = Number(invoice.totalAmount || 0);
+                const discount = Number(invoice.discountAmount || 0);
+                const paid = Number(invoice.paidAmount || 0);
+                const remaining = Number(invoice.remainingAmount || 0);
+
+                acc.grossAmount += gross;
+                acc.discountAmount += discount;
+                acc.netAmount += gross - discount;
+                acc.paidAmount += paid;
+                acc.remainingAmount += remaining;
+
+                return acc;
+            },
+            {
+                grossAmount: 0,
+                discountAmount: 0,
+                netAmount: 0,
+                paidAmount: 0,
+                remainingAmount: 0,
+            }
+        );
+
         // ── Har student ke liye enrollment fetch karo ──────────
         const studentsWithEnrollment = await Promise.all(
             batch.students.map(async (student) => {
@@ -716,6 +754,7 @@ exports.adminGetBatchById = async (req, res) => {
             success: true,
             data: {
                 ...batch.toObject(),
+                revenue,
                 students: studentsWithEnrollment,
             },
         });
@@ -874,22 +913,22 @@ exports.adminDeleteBatch = async (req, res) => {
 
 // GET /admin/v1/courses/:id
 exports.adminGetCourseById = async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id);
-    if (!course) return res.status(404).json({ message: "Course not found" });
-    res.status(200).json({ success: true, data: course });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: "Course not found" });
+        res.status(200).json({ success: true, data: course });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
 // GET /admin/v1/modules/:id
 exports.adminGetModuleById = async (req, res) => {
-  try {
-    const module = await Module.findById(req.params.id);
-    if (!module) return res.status(404).json({ message: "Module not found" });
-    res.status(200).json({ success: true, data: module });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    try {
+        const module = await Module.findById(req.params.id);
+        if (!module) return res.status(404).json({ message: "Module not found" });
+        res.status(200).json({ success: true, data: module });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
