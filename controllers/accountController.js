@@ -376,7 +376,7 @@ exports.createJournalEntry = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { description, date, lines, notes, sourceType } = req.body;
+    const { description, date, lines, notes, sourceType, sourceRef } = req.body;
 
     if (!description || !lines || lines.length < 2)
       return res.status(400).json({ success: false, message: "description and at least 2 lines required" });
@@ -393,6 +393,7 @@ exports.createJournalEntry = async (req, res) => {
       date: date ? new Date(date) : new Date(),
       lines,
       sourceType: sourceType || null,
+      sourceRef: sourceRef || null,
       entryType: "manual",
       status: "posted",
       createdBy: req.user._id,
