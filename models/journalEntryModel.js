@@ -69,7 +69,7 @@ const journalEntrySchema = new mongoose.Schema(
     sourceType: {
       type: String,
       enum: ["payment", "invoice", "expense", "manual", "refund", "adjustment"],
-      required: true,
+      default: null,
     },
     sourceRef: {
       type: mongoose.Schema.Types.ObjectId,
