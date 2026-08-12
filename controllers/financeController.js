@@ -19,6 +19,11 @@ const PDFDocument = require("pdfkit");
 const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
 
+function getNetAmount(invoice) {
+  return Math.max(0, (invoice.totalAmount || 0) - (invoice.discountAmount || 0));
+}
+
+
 // ─────────────────────────────────────────────
 // INVOICE MANAGEMENT
 // ─────────────────────────────────────────────
@@ -377,7 +382,7 @@ exports.markInvoicePaid = async (req, res) => {
     const before = invoice.toObject();
 
     invoice.status = "PAID";
-    invoice.paidAmount = invoice.totalAmount;
+    invoice.paidAmount = getNetAmount(invoice);
     invoice.remainingAmount = 0;
     await invoice.save();
 
@@ -813,10 +818,8 @@ exports.updateInstallment = async (req, res) => {
       (sum, inst) => sum + (inst.amount || 0), 0
     );
     // invoice.totalAmount = newTotal;
-    invoice.remainingAmount = Math.max(
-      0,
-      invoice.totalAmount - (invoice.paidAmount || 0)
-    );
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - (invoice.paidAmount || 0));
+
     // invoice.remainingAmount = Math.max(0, newTotal - (invoice.paidAmount || 0));
 
     await invoice.save();
@@ -882,10 +885,7 @@ exports.addInstallment = async (req, res) => {
       }
     }
 
-    invoice.remainingAmount = Math.max(
-      0,
-      invoice.totalAmount - (invoice.paidAmount || 0)
-    );
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - (invoice.paidAmount || 0));
 
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID"
@@ -983,7 +983,7 @@ exports.updateInvoice = async (req, res) => {
     const correctionDate = req.body.date ? new Date(req.body.date) : new Date();
 
     Object.assign(before, req.body);
-    before.remainingAmount = Math.max(0, before.totalAmount - (before.paidAmount || 0));
+    before.remainingAmount = Math.max(0, getNetAmount(before) - (before.paidAmount || 0));
     await before.save({ session });
 
     // ── totalAmount change hua? → journal reverse + repost ────────
@@ -1106,7 +1106,7 @@ exports.markInstallmentPaid = async (req, res) => {
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
     );
     invoice.paidAmount = totalPaid;
-    invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - totalPaid);
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID"
         : totalPaid > 0 ? "PARTIAL"
@@ -1468,7 +1468,7 @@ exports.editPaidInstallment = async (req, res) => {
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
     );
     invoice.paidAmount = totalPaid;
-    invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - totalPaid);
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID"
         : totalPaid > 0 ? "PARTIAL"
@@ -1580,8 +1580,9 @@ exports.voidInstallmentPayment = async (req, res) => {
       (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0),
       0
     );
+
     invoice.paidAmount = totalPaid;
-    invoice.remainingAmount = Math.max(0, invoice.totalAmount - totalPaid);
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - totalPaid);
     invoice.status =
       invoice.remainingAmount === 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "PENDING";
 
@@ -2204,7 +2205,7 @@ exports.approvePayment = async (req, res) => {
     const invoice = await Invoice.findById(payment.invoice);
     if (invoice) {
       invoice.paidAmount = (invoice.paidAmount || 0) + payment.amount;
-      invoice.remainingAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
+      invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - invoice.paidAmount);
       invoice.status =
         invoice.remainingAmount === 0 ? "PAID"
           : invoice.paidAmount > 0 ? "PARTIAL"
