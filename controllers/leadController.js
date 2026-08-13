@@ -16,6 +16,7 @@ const assignLeadManager = require("../utils/assignLeadManager.js");
 const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const sendPaymentPlanInvoiceEmail = require("../utils/sendPaymentPlanInvoiceEmail.js");
 const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
+const { sendServerSideStageEvent } = require("../libs/metaServerEvents.js");
 
 
 // Turnstile token verify utility
@@ -365,7 +366,9 @@ exports.createLead = async (req, res) => {
         }
 
         const email = req.body.email?.toLowerCase().trim();
-        const { first_name, last_name, program_id, opportunity_value: _, ...rest } = req.body;
+        const { first_name, last_name, program_id, opportunity_value: _, fbc, fbp, ...rest } = req.body;
+
+        console.log("Attribution:", { fbc, fbp });
 
         console.log("Parsed:", { email, first_name, last_name, program_id });
 
@@ -393,6 +396,8 @@ exports.createLead = async (req, res) => {
             ...rest,
             email,
             opportunity_value,
+            fbc: fbc || null,   // ✅ explicit
+            fbp: fbp || null,   // ✅ explicit
             created_by: req.user?.id || null,
         };
         console.log("leadData built:", JSON.stringify(leadData, null, 2));
@@ -749,7 +754,9 @@ exports.createLeadContact = async (req, res) => {
             return res.status(400).json({ message: "Security check failed. Please try again." });
         }
 
-        const { first_name, last_name, email, phone, query } = req.body;
+        const { first_name, last_name, email, phone, fbc, fbp, query } = req.body;
+
+        console.log("Attribution:", { fbc, fbp });
 
         if (!first_name || !email) {
             return res.status(400).json({
@@ -821,6 +828,8 @@ exports.createLeadContact = async (req, res) => {
             status: "new",
             quality: "cold",
             user_id: userId,
+            fbc: fbc || null,
+            fbp: fbp || null,
             assigned_to: assignedManager,
         });
 
@@ -952,6 +961,31 @@ exports.createLeadAdmin = async (req, res) => {
             });
         }
         res.status(500).json({ message: error.message });
+    }
+};
+
+exports.updateLeadStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status: newStatus } = req.body;
+
+        const lead = await Lead.findById(id);
+        if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+        const oldStatus = lead.status;
+
+        lead.status = newStatus;   // ✅ ab sahi value use ho rahi hai
+        await lead.save();
+
+        // ✅ Schedule — sirf "call_booked" mein pehli baar enter karne pe
+        if (oldStatus !== "call_booked" && newStatus === "call_booked") {
+            await sendServerSideStageEvent({ lead, eventName: "Schedule" });
+        }
+
+        return res.status(200).json({ success: true, data: lead });
+    } catch (error) {
+        console.error("updateLeadStatus error:", error);
+        return res.status(500).json({ message: error.message });
     }
 };
 

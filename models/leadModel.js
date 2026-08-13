@@ -70,9 +70,13 @@ const leadSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["new", "contacted", "qualified", "interested", "converted", "lost"],
+      enum: ["new", "contacted", "qualified", "call_booked", "interested", "converted", "lost"],
       default: "new",
     },
+
+    // aur fbc/fbp bhi confirm karlo ye already add hai ya nahi:
+    fbc: { type: String, default: null },
+    fbp: { type: String, default: null },
 
     quality: {
       type: String,
@@ -125,7 +129,7 @@ const leadSchema = new mongoose.Schema(
       totalAmount: Number,
       certificateFee: { type: Number, default: 0 },
       manualFee: { type: Number, default: 0 },
-  discountAmount: { type: Number, default: 0 },
+      discountAmount: { type: Number, default: 0 },
       advanceAmount: Number,
       advanceDueDate: Date,
       installments: [
