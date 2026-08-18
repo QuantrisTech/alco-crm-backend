@@ -495,7 +495,8 @@ exports.updateJournalEntry = async (req, res) => {
     for (const line of entry.lines) {
       const account = await Account.findById(line.account).session(session);
       if (!account) continue;
-      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const isDebitNormal = ["asset", "expense"].includes(account.type) ||
+        account.code === "4004";
       const delta = line.type === "debit"
         ? (isDebitNormal ? -line.amount : line.amount)   // undo = reverse sign
         : (isDebitNormal ? line.amount : -line.amount);
@@ -506,7 +507,8 @@ exports.updateJournalEntry = async (req, res) => {
     // ── Step 2: NAYI lines ka effect apply karo ──
     for (const line of lines) {
       const account = await Account.findById(line.account).session(session);
-      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const isDebitNormal = ["asset", "expense"].includes(account.type) ||
+        account.code === "4004";
       const delta = line.type === "debit"
         ? (isDebitNormal ? Number(line.amount) : -Number(line.amount))
         : (isDebitNormal ? -Number(line.amount) : Number(line.amount));
@@ -585,7 +587,7 @@ exports.deleteJournalEntry = async (req, res) => {
     for (const line of entry.lines) {
       const account = await Account.findById(line.account).session(session);
       if (!account) continue;
-      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const isDebitNormal = ["asset", "expense"].includes(account.type) || account.code === "4004";
       const delta = line.type === "debit"
         ? (isDebitNormal ? -line.amount : line.amount)   // undo = reverse sign
         : (isDebitNormal ? line.amount : -line.amount);

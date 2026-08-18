@@ -16,6 +16,7 @@ const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const jwt = require("jsonwebtoken");
 const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
+const JournalEntry = require("../models/journalEntryModel.js");
 const reverseJournalEntry = require("../utils/reverseJournalEntry.js");
 const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
 
@@ -263,23 +264,35 @@ exports.createInvoice = async (req, res) => {
 
 exports.getAllInvoices = async (req, res) => {
   try {
-    const { status, userId, enrollmentId, search, dateFrom, dateTo, page = 1, limit = 10 } = req.query;
+    const { status, userId, enrollmentId, search, dateFrom, dateTo, programIds, hasDiscount, page = 1, limit = 10 } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
     if (userId) filter.user = userId;
     if (enrollmentId) filter.enrollment = enrollmentId;
 
-    // Date range filter
-    // if (dateFrom || dateTo) {
-    //   filter.createdAt = {};
-    //   if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
-    //   if (dateTo) {
-    //     const end = new Date(dateTo);
-    //     end.setHours(23, 59, 59, 999);
-    //     filter.createdAt.$lte = end;
-    //   }
-    // }
+    // ── Discount filter ──────────────────────────────────
+    if (hasDiscount === "true") {
+      filter.discountAmount = { $gt: 0 };
+    }
+
+    // ── Program filter — enrollment ke through resolve karna hoga ──
+    if (programIds) {
+      const programIdArr = programIds.split(",").filter(Boolean);
+      if (programIdArr.length) {
+        const matchedEnrollments = await Enrollment.find({
+          program: { $in: programIdArr },
+        }).select("_id");
+        const enrollmentIds = matchedEnrollments.map((e) => e._id);
+
+        // Single invoice (enrollment field) YA bundle invoice (items.enrollment) — dono cover karo
+        filter.$or = [
+          ...(filter.$or || []),
+          { enrollment: { $in: enrollmentIds } },
+          { "items.enrollment": { $in: enrollmentIds } },
+        ];
+      }
+    }
 
     if (dateFrom || dateTo) {
       filter.issueDate = {};
@@ -287,8 +300,6 @@ exports.getAllInvoices = async (req, res) => {
       if (dateTo) filter.issueDate.$lte = new Date(dateTo + "T23:59:59.999Z");
     }
 
-    // Search by student name or email (populate ke baad filter nahi hota, isliye lookup use karenge)
-    let userIds = [];
     if (search) {
       const matchedUsers = await User.find({
         $or: [
@@ -298,50 +309,19 @@ exports.getAllInvoices = async (req, res) => {
       }).select("_id");
       const userIds = matchedUsers.map((u) => u._id);
 
-      const searchOr = [
-        { invoiceNumber: { $regex: search, $options: "i" } },
-        { user: { $in: userIds } },
-      ];
-
       filter.$and = filter.$and || [];
-      filter.$and.push({ $or: searchOr });
+      filter.$and.push({
+        $or: [
+          { invoiceNumber: { $regex: search, $options: "i" } },
+          { user: { $in: userIds } },
+        ],
+      });
     }
-
-    // const invoices = await Invoice.find(filter)
-    //   .populate("user", "name email phone")
-    //   .populate({
-    //     path: "enrollment",
-    //     populate: [
-    //       { path: "program", select: "name short_description" },
-    //       { path: "batch", select: "name start_date end_date" },
-    //     ],
-    //   })
-    //   .sort({ createdAt: -1 })
-    //   .skip((page - 1) * limit)
-    //   .limit(Number(limit));
 
     const invoices = await Invoice.find(filter)
       .populate("user", "name email phone")
-      .populate({
-        path: "enrollment",
-        populate: [
-          { path: "program", select: "name short_description" },
-          { path: "batch", select: "name start_date end_date" },
-        ],
-      })
-      .populate({
-        path: "items.enrollment",
-        populate: [
-          {
-            path: "program",
-            select: "name short_description",
-          },
-          {
-            path: "batch",
-            select: "name start_date end_date",
-          },
-        ],
-      })
+      .populate({ path: "enrollment", populate: [{ path: "program", select: "name short_description" }, { path: "batch", select: "name start_date end_date" }] })
+      .populate({ path: "items.enrollment", populate: [{ path: "program", select: "name short_description" }, { path: "batch", select: "name start_date end_date" }] })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -4203,6 +4183,23 @@ exports.previewBulkDiscount = async (req, res) => {
         continue;
       }
 
+      // ✅ NAYA — reverse karne layak posted journal entry hai ya nahi, yahi pe check karo
+      const postedEntry = await JournalEntry.findOne({
+        sourceType: "invoice",
+        sourceRef: invoice._id,
+        status: "posted",
+      }).select("_id");
+
+      if (!postedEntry) {
+        preview.push({
+          ...r,
+          status: "no_journal_entry",
+          invoiceId: invoice._id,
+          studentName: invoice.user?.name,
+        });
+        continue;
+      }
+
       preview.push({
         ...r,
         status: "eligible",
@@ -4212,9 +4209,9 @@ exports.previewBulkDiscount = async (req, res) => {
         currentNetAmount: invoice.totalAmount,
         newGrossAmount: invoice.totalAmount + r.discountAmount,
         paidAmount: invoice.paidAmount || 0,
-        remainingAmount: invoice.remainingAmount || 0,   // unchanged
+        remainingAmount: invoice.remainingAmount || 0,
         issueDate: invoice.issueDate,
-      });
+      })
     }
 
     res.status(200).json({
