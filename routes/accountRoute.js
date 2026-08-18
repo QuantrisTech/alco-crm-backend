@@ -79,6 +79,8 @@ const {
   getAccountLedger,
   getAllJournalEntries,
   createJournalEntry,
+  updateJournalEntry,
+  deleteJournalEntry,
   getAllExpenseTitles,
   createExpenseTitle,
   updateExpenseTitle,
@@ -106,6 +108,8 @@ router.get("/dashboard", protect, financeAdmin, getAccountsDashboard);
 // ✅ Must be before /:id
 router.get("/journal",  protect, financeAdmin, getAllJournalEntries);
 router.post("/journal", protect, financeAdmin, createJournalEntry);
+router.patch("/journal/:id", protect, financeAdmin, updateJournalEntry);
+router.delete("/journal/:id", protect, financeAdmin, deleteJournalEntry);
 
 router.get("/expense-titles", protect, financeAdmin, getAllExpenseTitles);
 router.post("/expense-titles", protect, financeAdmin, createExpenseTitle);

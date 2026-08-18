@@ -408,7 +408,14 @@ exports.createJournalEntry = async (req, res) => {
     // Update account balances
     for (const line of lines) {
       const account = await Account.findById(line.account).session(session);
-      const isDebitNormal = ["asset", "expense"].includes(account.type);
+
+      // ✅ FIX: 4004 (Discounts & Allowances) type="income" hai DB me,
+      // lekin behave debit-normal karta hai (jaisa postInvoiceJournal me
+      // already hota hai). Isse "contra-revenue" list me shamil karo
+      // taake manual entries bhi wahi convention follow karein.
+      const isDebitNormal =
+        ["asset", "expense", "contra-revenue"].includes(account.type) ||
+        account.code === "4004";
 
       const delta = line.type === "debit"
         ? (isDebitNormal ? line.amount : -line.amount)
@@ -428,6 +435,177 @@ exports.createJournalEntry = async (req, res) => {
 
     await session.commitTransaction();
     res.status(201).json({ success: true, data: entry[0] });
+  } catch (err) {
+    await session.abortTransaction();
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+// PATCH /api/v1/accounts/journal/:id — Edit a MANUAL journal entry
+exports.updateJournalEntry = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { description, date, lines, notes } = req.body;
+    const entry = await JournalEntry.findById(req.params.id).session(session);
+
+    if (!entry) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Journal entry not found" });
+    }
+
+    // ── Safety guard — sirf manual entries edit ho sakti hain ──
+    // if (entry.entryType !== "manual") {
+    //   await session.abortTransaction();
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Only manual entries can be edited. Auto entries (invoice/payment/expense) must be corrected via reversal.",
+    //   });
+    // }
+    if (entry.status !== "posted") {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Only posted entries can be edited" });
+    }
+    if (!description || !lines || lines.length < 2) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "description and at least 2 lines required" });
+    }
+
+    const totalDebit = lines.filter(l => l.type === "debit").reduce((s, l) => s + Number(l.amount || 0), 0);
+    const totalCredit = lines.filter(l => l.type === "credit").reduce((s, l) => s + Number(l.amount || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Debits must equal credits" });
+    }
+
+    for (const line of lines) {
+      const acc = await Account.findById(line.account).session(session);
+      if (!acc) {
+        await session.abortTransaction();
+        return res.status(400).json({ success: false, message: `Account ${line.account} not found` });
+      }
+    }
+
+    const before = entry.toObject();
+
+    // ── Step 1: OLD lines ka effect Account.currentBalance se undo karo ──
+    for (const line of entry.lines) {
+      const account = await Account.findById(line.account).session(session);
+      if (!account) continue;
+      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const delta = line.type === "debit"
+        ? (isDebitNormal ? -line.amount : line.amount)   // undo = reverse sign
+        : (isDebitNormal ? line.amount : -line.amount);
+      account.currentBalance += delta;
+      await account.save({ session });
+    }
+
+    // ── Step 2: NAYI lines ka effect apply karo ──
+    for (const line of lines) {
+      const account = await Account.findById(line.account).session(session);
+      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const delta = line.type === "debit"
+        ? (isDebitNormal ? Number(line.amount) : -Number(line.amount))
+        : (isDebitNormal ? -Number(line.amount) : Number(line.amount));
+      account.currentBalance += delta;
+      await account.save({ session });
+    }
+
+    // ── Step 3: Entry document update karo ──
+    entry.description = description;
+    entry.date = date ? new Date(date) : entry.date;
+    entry.lines = lines;
+    entry.notes = notes || entry.notes;
+    entry.period = {
+      month: (date ? new Date(date) : entry.date).getMonth() + 1,
+      year: (date ? new Date(date) : entry.date).getFullYear(),
+    };
+    await entry.save({ session });
+
+    await logAudit({
+      req,
+      action: "JOURNAL_ENTRY_UPDATED",
+      module: "accounts",
+      targetId: entry._id,
+      before,
+      after: entry.toObject(),
+    });
+
+    await session.commitTransaction();
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    await session.abortTransaction();
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+// DELETE /api/v1/accounts/journal/:id — Delete a MANUAL journal entry
+exports.deleteJournalEntry = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const entry = await JournalEntry.findById(req.params.id).session(session);
+
+    if (!entry) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Journal entry not found" });
+    }
+
+    // ── Safety guard — sirf manual entries delete ho sakti hain ──
+    if (entry.entryType !== "manual") {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Only manual entries can be deleted. Auto entries (invoice/payment/expense) must be corrected via reversal.",
+      });
+    }
+    if (entry.status !== "posted") {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Only posted entries can be deleted" });
+    }
+    // Koi aur entry isko reference to nahi karti? (originalJournal se link)
+    const dependentReversal = await JournalEntry.findOne({ originalJournal: entry._id }).session(session);
+    if (dependentReversal) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "This entry has a linked reversal — cannot delete directly",
+      });
+    }
+
+    const before = entry.toObject();
+
+    // ── Account.currentBalance se is entry ka effect undo karo ──
+    for (const line of entry.lines) {
+      const account = await Account.findById(line.account).session(session);
+      if (!account) continue;
+      const isDebitNormal = ["asset", "expense"].includes(account.type);
+      const delta = line.type === "debit"
+        ? (isDebitNormal ? -line.amount : line.amount)   // undo = reverse sign
+        : (isDebitNormal ? line.amount : -line.amount);
+      account.currentBalance += delta;
+      await account.save({ session });
+    }
+
+    await entry.deleteOne({ session });
+
+    await logAudit({
+      req,
+      action: "JOURNAL_ENTRY_DELETED",
+      module: "accounts",
+      targetId: entry._id,
+      before,
+      after: null,
+    });
+
+    await session.commitTransaction();
+    res.json({ success: true, message: "Journal entry deleted, balances reversed" });
   } catch (err) {
     await session.abortTransaction();
     res.status(500).json({ success: false, message: err.message });
