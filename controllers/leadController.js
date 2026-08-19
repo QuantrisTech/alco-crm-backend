@@ -2624,7 +2624,7 @@ exports.addActivity = async (req, res) => {
 //                     replacements: {
 //                         UserName: user.name || lead.first_name,
 //                         ProgramName: lead.program_name || "the program",
-//                         ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
+//                         ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
 //                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
 //                         SupportEmail: "alco@support.com",
 //                         YourCompanyName: "Al-and-co",
@@ -2706,7 +2706,7 @@ exports.addActivity = async (req, res) => {
 //                     replacements: {
 //                         UserName: user.name || lead.first_name,
 //                         ProgramName: lead.program_name || "the program",
-//                         ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
+//                         ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
 //                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
 //                         SupportEmail: "alco@support.com",
 //                         YourCompanyName: "Al-and-co",
@@ -2786,7 +2786,7 @@ exports.markInterested = async (req, res) => {
                     replacements: {
                         UserName: user.name || lead.first_name,
                         ProgramName: lead.program_name || "the program",
-                        ContractLink: `${process.env.FRONTEND_BASE_URL}/dashboard/contract`,
+                        ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
                         // ContractLink: `${process.env.BACKEND_BASE_URL}/dashboard/contract`,
                         SupportEmail: "alco@support.com",
                         YourCompanyName: "Al-and-co",
