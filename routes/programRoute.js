@@ -133,9 +133,9 @@ router.get(
 // ── PUBLIC ──
 router.get("/public", getPrograms);
 router.get("/public/:slug", getProgramBySlug);
+router.get("/name", getProgramsPublic);
 router.get("/public/:slug/curriculum", getProgramCurriculum);
 router.get("/public/:slug/batches", getProgramBatches);
-router.get("/name", getProgramsPublic);
 
 // ── FIRST ADMIN — Programs ──
 router.get("/", protect, authorize("admin", "super_admin", "sales_manager", "sales_rep", "finance_manager"), adminGetPrograms);
