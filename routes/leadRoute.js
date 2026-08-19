@@ -21,8 +21,11 @@ const {
   markInterested,
   updatePaymentPlan,
   submitContract,
-  sendPaymentPlanInvoice
+  sendPaymentPlanInvoice,
+  previewBulkLeads,
+  confirmBulkLeads,
 } = require("../controllers/leadController.js");
+const { uploadExcel } = require("../middlewares/uploadExcel.js");
 
 const { protect } = require("../middlewares/authMiddleware.js");
 const { authorize } = require("../middlewares/roleMiddleware.js");
@@ -87,6 +90,21 @@ router.post(
   "/:id/send-payment-plan-email",
   protect,
   authorize("admin", "super_admin", "finance_manager", "sales_manager"), sendPaymentPlanInvoice
+);
+
+router.post(
+  "/bulk-import/preview",
+  protect,
+  authorize("admin", "super_admin", "sales_manager"),
+  uploadExcel.single("file"),
+  previewBulkLeads
+);
+ 
+router.post(
+  "/bulk-import/confirm",
+  protect,
+  authorize("admin", "super_admin", "sales_manager"),
+  confirmBulkLeads
 );
 
 module.exports = router;

@@ -98,7 +98,7 @@ const userSchema = new mongoose.Schema(
     source: {
       type: String,
       enum: ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact", "contact us",
-        "webinar", "frontforce", "lms", "crm", "resource","register" , "other"],
+        "webinar", "frontforce", "lms", "crm", "resource", "register", "other"],
       default: "enroll"
     },
 
@@ -201,6 +201,21 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
+
+    adSource: {
+      platform: { type: String, default: null },
+      externalLeadId: { type: String, default: null },
+      adId: { type: String, default: null },
+      adName: { type: String, default: null },
+      adsetId: { type: String, default: null },
+      adsetName: { type: String, default: null },
+      campaignId: { type: String, default: null },
+      campaignName: { type: String, default: null },
+      formId: { type: String, default: null },
+      formName: { type: String, default: null },
+      createdTime: { type: Date, default: null },
+    },
+
   },
   { timestamps: true }
 );

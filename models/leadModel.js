@@ -201,6 +201,28 @@ const leadSchema = new mongoose.Schema(
       default: false,
     },
 
+    city: {
+      type: String,
+      default: null,
+    },
+
+    // ✅ Facebook/Meta Lead Ads se aayi hui leads ke liye tracking details.
+    // Taake baad mein pata chal sake ye lead kis specific ad/campaign se aayi thi.
+    adSource: {
+      platform: { type: String, default: null },        // "fb"
+      externalLeadId: { type: String, default: null },  // Facebook ki apni lead id (jaise "2027557067899088")
+      adId: { type: String, default: null },
+      adName: { type: String, default: null },
+      adsetId: { type: String, default: null },
+      adsetName: { type: String, default: null },
+      campaignId: { type: String, default: null },
+      campaignName: { type: String, default: null },
+      formId: { type: String, default: null },
+      formName: { type: String, default: null },
+      isOrganic: { type: Boolean, default: false },
+      createdTime: { type: Date, default: null },        // Facebook pe lead submit hone ka asal waqt
+    },
+
     lost_reason: String,
     lost_notes: String,
     notes: String,

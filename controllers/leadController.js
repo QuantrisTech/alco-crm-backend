@@ -17,6 +17,7 @@ const { postInvoiceJournal } = require("../utils/postInvoiceJournal.js");
 const sendPaymentPlanInvoiceEmail = require("../utils/sendPaymentPlanInvoiceEmail.js");
 const { invoiceNumberExists, reserveNextInvoiceNumber } = require("../utils/invoiceNumber.js");
 const { sendServerSideStageEvent } = require("../libs/metaServerEvents.js");
+const ExcelJS = require("exceljs");
 
 
 // Turnstile token verify utility
@@ -3369,5 +3370,450 @@ exports.sendPaymentPlanInvoice = async (req, res) => {
     } catch (err) {
         console.error("sendPaymentPlanInvoice error:", err.message);
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+
+// ✅ Ye functions leadController.js mein ADD/REPLACE karni hain (existing exports ke sath)
+// NAYA import add karo: const ExcelJS = require("exceljs");
+
+// ✅ Robust cell parsing (Date/Number/Boolean/hyperlink/rich-text safe)
+function cellRawValue(row, colNumber) {
+    if (!colNumber) return null;
+    const cell = row.getCell(colNumber);
+    const val = cell.value;
+    if (val === null || val === undefined) return null;
+    if (val instanceof Date) return val;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "object") {
+        if (val.richText) return val.richText.map((rt) => rt.text).join("");
+        if (val.text) {
+            if (typeof val.text === "string") return val.text;
+            if (val.text.richText) return val.text.richText.map((rt) => rt.text).join("");
+            if (val.hyperlink) return String(val.hyperlink).replace(/^mailto:/i, "");
+        }
+        if (val.result !== undefined) return val.result;
+        return null;
+    }
+    return val;
+}
+function cellText(row, colNumber) {
+    const val = cellRawValue(row, colNumber);
+    if (val === null || val === undefined) return null;
+    if (val instanceof Date) return val.toISOString();
+    const str = String(val).trim();
+    return str || null;
+}
+function cellDate(row, colNumber) {
+    const val = cellRawValue(row, colNumber);
+    if (val === null || val === undefined) return null;
+    if (val instanceof Date) return val;
+    const parsed = new Date(val);
+    return isNaN(parsed.getTime()) ? null : parsed;
+}
+function cellBoolean(row, colNumber) {
+    const val = cellRawValue(row, colNumber);
+    if (typeof val === "boolean") return val;
+    if (val === null || val === undefined) return false;
+    const str = String(val).trim().toLowerCase();
+    return str === "true" || str === "1" || str === "yes";
+}
+
+// ✅ Header row parse karo — DUAL MODE:
+//   1. Facebook/Meta Lead Ads export (id, created_time, ad_id, ad_name, adset_id,
+//      adset_name, campaign_id, campaign_name, form_id, form_name, is_organic,
+//      platform, full_name, job_title, email, phone_number, city)
+//   2. Generic manual list (First Name, Last Name, Email, Phone, Program,
+//      Nationality, Profession, Source, Quality)
+function buildLeadHeaderMap(worksheet) {
+    const headerRow = worksheet.getRow(1);
+    const map = {};
+    const rawHeaders = new Set();
+
+    headerRow.eachCell((cell, colNumber) => {
+        const text = String(cell.value || "").trim().toLowerCase();
+        if (!text) return;
+        rawHeaders.add(text);
+
+        // Facebook export headers
+        if (text === "id") map.externalLeadId = colNumber;
+        else if (text === "created_time") map.createdTime = colNumber;
+        else if (text === "ad_id") map.adId = colNumber;
+        else if (text === "ad_name") map.adName = colNumber;
+        else if (text === "adset_id") map.adsetId = colNumber;
+        else if (text === "adset_name") map.adsetName = colNumber;
+        else if (text === "campaign_id") map.campaignId = colNumber;
+        else if (text === "campaign_name") map.campaignName = colNumber;
+        else if (text === "form_id") map.formId = colNumber;
+        else if (text === "form_name") map.formName = colNumber;
+        else if (text === "is_organic") map.isOrganic = colNumber;
+        else if (text === "platform") map.platform = colNumber;
+        else if (text === "full_name") map.fullName = colNumber;
+        else if (text === "job_title") map.jobTitle = colNumber;
+        else if (text === "phone_number") map.phoneNumber = colNumber;
+        else if (text === "city") map.city = colNumber;
+        // Generic manual-list headers
+        else if (text === "first name") map.firstName = colNumber;
+        else if (text === "last name") map.lastName = colNumber;
+        else if (text === "phone") map.phone = colNumber;
+        else if (text === "program") map.program = colNumber;
+        else if (text === "nationality") map.nationality = colNumber;
+        else if (text === "profession") map.profession = colNumber;
+        else if (text === "source") map.source = colNumber;
+        else if (text === "quality") map.quality = colNumber;
+        // Shared
+        else if (text === "email") map.email = colNumber;
+    });
+
+    // ✅ Auto-detect: Facebook export vs generic list
+    map.isFacebookFormat = rawHeaders.has("full_name") && (rawHeaders.has("ad_id") || rawHeaders.has("campaign_id"));
+
+    return map;
+}
+
+const VALID_SOURCES = ["utm", "referral", "social", "facebook", "instagram", "google", "organic", "enroll", "contact", "webinar", "frontforce", "lms", "crm", "resource", "register", "chatbot", "other"];
+const VALID_QUALITIES = ["hot", "warm", "cold"];
+
+// ✅ "Jabir Hussain" → { firstName: "Jabir", lastName: "Hussain" }
+function splitFullName(fullName) {
+    const parts = (fullName || "").trim().split(/\s+/);
+    const firstName = parts[0] || "";
+    const lastName = parts.slice(1).join(" ") || "";
+    return { firstName, lastName };
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 1: PREVIEW
+// Body: multipart file + optional "defaultProgramId" (Facebook exports ke liye
+// zaroori hai, kyunki unmein per-row Program column hota hi nahi — ek file
+// = ek ad = ek program hota hai)
+// ─────────────────────────────────────────────────────────
+exports.previewBulkLeads = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Excel file is required" });
+        }
+
+        const { defaultProgramId } = req.body;
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        const headerMap = buildLeadHeaderMap(worksheet);
+        if (!headerMap.email) {
+            return res.status(400).json({ success: false, message: "'Email' column header row mein nahi mila" });
+        }
+        if (!headerMap.isFacebookFormat && !headerMap.firstName) {
+            return res.status(400).json({
+                success: false,
+                message: "'First Name' column chahiye (ya Facebook ad-export format use karein jisme 'full_name' hota hai)",
+            });
+        }
+
+        const allPrograms = await Program.find({}).select("name price");
+        const programByName = new Map(allPrograms.map((p) => [p.name.trim().toLowerCase(), p]));
+        const defaultProgram = defaultProgramId
+            ? allPrograms.find((p) => p._id.toString() === defaultProgramId)
+            : null;
+
+        const parsedRows = [];
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const email = cellText(row, headerMap.email)?.toLowerCase();
+            if (!email) return;
+
+            if (headerMap.isFacebookFormat) {
+                // ── FACEBOOK AD EXPORT MODE ──────────────────────────────
+                const { firstName, lastName } = splitFullName(cellText(row, headerMap.fullName));
+                if (!firstName) return;
+
+                const rawPhone = cellText(row, headerMap.phoneNumber);
+                const phone = rawPhone ? rawPhone.replace(/^p:/i, "").trim() : null;
+
+                const rawExternalId = cellText(row, headerMap.externalLeadId);
+                const externalLeadId = rawExternalId ? rawExternalId.replace(/^l:/i, "").trim() : null;
+
+                parsedRows.push({
+                    firstName,
+                    lastName,
+                    email,
+                    phone,
+                    programNameRaw: null, // ✅ FB export mein program column nahi hota — defaultProgram use hoga
+                    nationality: undefined,
+                    profession: cellText(row, headerMap.jobTitle) || undefined,
+                    city: cellText(row, headerMap.city) || undefined,
+                    source: "facebook",
+                    quality: "warm",
+                    adSource: {
+                        platform: cellText(row, headerMap.platform) || "fb",
+                        externalLeadId,
+                        adId: cellText(row, headerMap.adId),
+                        adName: cellText(row, headerMap.adName),
+                        adsetId: cellText(row, headerMap.adsetId),
+                        adsetName: cellText(row, headerMap.adsetName),
+                        campaignId: cellText(row, headerMap.campaignId),
+                        campaignName: cellText(row, headerMap.campaignName),
+                        formId: cellText(row, headerMap.formId),
+                        formName: cellText(row, headerMap.formName),
+                        isOrganic: cellBoolean(row, headerMap.isOrganic),
+                        createdTime: cellDate(row, headerMap.createdTime),
+                    },
+                });
+            } else {
+                // ── GENERIC MANUAL LIST MODE ─────────────────────────────
+                const firstName = cellText(row, headerMap.firstName);
+                if (!firstName) return;
+
+                const source = cellText(row, headerMap.source)?.toLowerCase();
+                const quality = cellText(row, headerMap.quality)?.toLowerCase();
+
+                parsedRows.push({
+                    firstName,
+                    lastName: cellText(row, headerMap.lastName) || "",
+                    email,
+                    phone: cellText(row, headerMap.phone) || null,
+                    programNameRaw: cellText(row, headerMap.program),
+                    nationality: cellText(row, headerMap.nationality) || undefined,
+                    profession: cellText(row, headerMap.profession) || undefined,
+                    city: undefined,
+                    source: VALID_SOURCES.includes(source) ? source : "enroll",
+                    quality: VALID_QUALITIES.includes(quality) ? quality : "cold",
+                    adSource: null,
+                });
+            }
+        });
+
+        if (parsedRows.length === 0) {
+            return res.status(400).json({ success: false, message: "No valid rows found" });
+        }
+
+        // ✅ file ke andar duplicate email hata do (last occurrence rakho)
+        const rowMap = new Map();
+        parsedRows.forEach((r) => rowMap.set(r.email, r));
+        const uniqueRows = Array.from(rowMap.values());
+
+        const emails = uniqueRows.map((r) => r.email);
+        const existingUsers = await User.find({ email: { $in: emails } }).select("name email");
+        const userMap = new Map(existingUsers.map((u) => [u.email, u]));
+
+        const preview = [];
+        for (const r of uniqueRows) {
+            // ✅ Program resolve: pehle row ka apna (generic mode), warna defaultProgram (FB mode)
+            let matchedProgram = r.programNameRaw
+                ? programByName.get(r.programNameRaw.trim().toLowerCase())
+                : null;
+            if (!matchedProgram && defaultProgram) matchedProgram = defaultProgram;
+
+            const baseInfo = {
+                firstName: r.firstName,
+                lastName: r.lastName,
+                email: r.email,
+                phone: r.phone,
+                nationality: r.nationality,
+                profession: r.profession,
+                city: r.city,
+                source: r.source,
+                quality: r.quality,
+                adSource: r.adSource,
+                existingUser: userMap.get(r.email) ? { name: userMap.get(r.email).name } : null,
+            };
+
+            if (r.programNameRaw && !matchedProgram) {
+                preview.push({ ...baseInfo, status: "program_not_found", requestedProgramName: r.programNameRaw });
+                continue;
+            }
+
+            if (!matchedProgram) {
+                // Koi program hi nahi mila (na row se, na default se) — bina program ke lead bhi allowed hai
+                preview.push({ ...baseInfo, status: "eligible", programId: null, programName: null });
+                continue;
+            }
+
+            const existingLead = await Lead.findOne({ email: r.email, program_id: matchedProgram._id });
+            if (existingLead) {
+                preview.push({
+                    ...baseInfo,
+                    status: "duplicate",
+                    programId: matchedProgram._id,
+                    programName: matchedProgram.name,
+                    existingLeadId: existingLead._id,
+                });
+                continue;
+            }
+
+            preview.push({
+                ...baseInfo,
+                status: "eligible",
+                programId: matchedProgram._id,
+                programName: matchedProgram.name,
+                opportunityValue: matchedProgram.price || 0,
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            isFacebookFormat: headerMap.isFacebookFormat,
+            totalRows: uniqueRows.length,
+            eligibleCount: preview.filter((p) => p.status === "eligible").length,
+            duplicateCount: preview.filter((p) => p.status === "duplicate").length,
+            programNotFoundCount: preview.filter((p) => p.status === "program_not_found").length,
+            preview,
+            availablePrograms: allPrograms.map((p) => ({ _id: p._id, name: p.name, price: p.price })),
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─────────────────────────────────────────────────────────
+// STEP 2: CONFIRM
+// Payload: [{ firstName, lastName, email, phone, programId, nationality,
+//   profession, city, source, quality, adSource }]
+// ─────────────────────────────────────────────────────────
+exports.confirmBulkLeads = async (req, res) => {
+    try {
+        const { leads } = req.body;
+
+        if (!Array.isArray(leads) || leads.length === 0) {
+            return res.status(400).json({ success: false, message: "leads array is required" });
+        }
+
+        const created = [];
+        const skipped = [];
+
+        for (const item of leads) {
+            const {
+                firstName, lastName, email, phone, programId,
+                nationality, profession, city, source, quality, adSource,
+            } = item;
+
+            if (!firstName || !email) {
+                skipped.push({ email, reason: "Missing first name or email" });
+                continue;
+            }
+
+            const cleanEmail = email.toLowerCase().trim();
+
+            if (programId) {
+                const existingLead = await Lead.findOne({ email: cleanEmail, program_id: programId });
+                if (existingLead) {
+                    skipped.push({ email: cleanEmail, reason: "Lead already exists for this email+program" });
+                    continue;
+                }
+            }
+
+            let opportunity_value = 0;
+            let programName = null;
+            if (programId) {
+                const program = await Program.findById(programId).select("name price");
+                if (program) {
+                    opportunity_value = program.price || 0;
+                    programName = program.name;
+                }
+            }
+
+            // ✅ NAYA — har lead ko round-robin tareeqe se ek-ek karke assign karo
+            const assignedManager = await assignLeadManager();
+
+            let user = await User.findOne({ email: cleanEmail });
+            let isNewUser = false;
+            let plainPassword = null;
+
+            if (!user) {
+                isNewUser = true;
+                plainPassword = Math.random().toString(36).slice(-8);
+                const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+                user = await User.create({
+                    name: `${firstName} ${lastName || ""}`.trim(),
+                    email: cleanEmail,
+                    phone: phone || null,
+                    password: hashedPassword,
+                    role: "user",
+                    isVerified: true,
+                    isActive: true,
+                    avatarColor: generateColor(cleanEmail),
+                    isTemporaryPassword: true,
+                    // ✅ Ad-tracking sirf naye user par set hoti hai — "kis ad ne is account ko janam diya"
+                    ...(adSource
+                        ? {
+                            adSource: {
+                                platform: adSource.platform,
+                                externalLeadId: adSource.externalLeadId,
+                                adId: adSource.adId,
+                                adName: adSource.adName,
+                                adsetId: adSource.adsetId,
+                                adsetName: adSource.adsetName,
+                                campaignId: adSource.campaignId,
+                                campaignName: adSource.campaignName,
+                                formId: adSource.formId,
+                                formName: adSource.formName,
+                                createdTime: adSource.createdTime,
+                            },
+                        }
+                        : {}),
+                });
+            }
+
+            const lead = await Lead.create({
+                first_name: firstName,
+                last_name: lastName || "",
+                email: cleanEmail,
+                phone: phone || null,
+                program_id: programId || null,
+                program_name: programName,
+                nationality: nationality || undefined,
+                profession: profession || undefined,
+                city: city || undefined,
+                source: source || "enroll",
+                quality: quality || "cold",
+                opportunity_value,
+                user_id: user._id,
+                created_by: req.user._id,
+                assigned_to: assignedManager,  
+                ...(adSource ? { adSource } : {}),
+            });
+            if (isNewUser) {
+                try {
+                    await sendEmailDynamic({
+                        to: cleanEmail,
+                        subject: "Your Account Credentials 🔑",
+                        templateName: "send-user-credentials",
+                        replacements: {
+                            UserName: `${firstName} ${lastName || ""}`,
+                            UserEmail: cleanEmail,
+                            UserPassword: plainPassword,
+                            SupportEmail: "alco@support.com",
+                            YourCompanyName: "Al-and-co",
+                            LoginLink: `https://app.arslanlarik.com/auth?email=${cleanEmail}&password=${plainPassword}`,
+                        },
+                    });
+                } catch (emailErr) {
+                    console.error("Credentials email failed:", emailErr.message);
+                }
+            }
+
+            await logAudit({
+                req,
+                action: "LEAD_BULK_IMPORTED",
+                module: "leads",
+                targetId: lead._id,
+                after: lead.toObject(),
+            });
+
+            created.push(lead);
+        }
+
+        res.status(201).json({
+            success: true,
+            createdCount: created.length,
+            skippedCount: skipped.length,
+            created,
+            skipped,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
