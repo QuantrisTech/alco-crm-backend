@@ -4052,7 +4052,7 @@ exports.confirmBulkInvoice = async (req, res) => {
 
       // ✅ Invoice creation journal — AR + Income, bilkul normal single-invoice flow jaisa
       await postInvoiceJournal({
-        amount: netAmount,
+        amount: totalAmount,     
         discountAmount,
         invoiceId: invoice._id,
         userId: req.user._id,
@@ -4278,7 +4278,7 @@ exports.confirmBulkDiscount = async (req, res) => {
         }
 
         // ── Step 2: Invoice ko gross + discount se update karo (remainingAmount same rehta hai) ──
-        invoice.totalAmount = newGrossAmount;
+        invoice.totalAmount = newGrossAmount;   // 350000 + 100000 = 450000 ✅ ye theek update ho raha hai
         invoice.discountAmount = discountAmount;
         await invoice.save({ session });
 
