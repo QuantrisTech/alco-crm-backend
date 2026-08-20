@@ -13,7 +13,7 @@ async function reverseJournalEntry({ sourceType, sourceRef, userId, description,
     sourceType,
     sourceRef,
     status: "posted",
-    isReversal: false,
+    isReversal: { $ne: true },
   }).session(session);
 
   console.log("Found posted entries:", originalEntries.length);

@@ -1672,6 +1672,58 @@ exports.deleteInvoice = async (req, res) => {
     session.endSession();
   }
 };
+exports.deleteInstallment = async (req, res) => {
+  try {
+    const { invoiceId, installmentId } = req.params;
+
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice)
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+
+    const installment = invoice.installments.id(installmentId);
+    if (!installment)
+      return res.status(404).json({ success: false, message: "Installment not found" });
+
+    // ── Sirf PENDING + "program" type delete ho sakta hai ──
+    if (installment.status === "PAID") {
+      return res.status(400).json({ success: false, message: "Paid installments cannot be deleted" });
+    }
+    if (installment.feeType === "certificate" || installment.feeType === "manual") {
+      return res.status(400).json({ success: false, message: "Certificate/manual fees cannot be deleted from here" });
+    }
+
+    const before = invoice.toObject();
+
+    // Simple removal — totalAmount ko touch nahi karna, kyunki ye PENDING program installment hai
+    invoice.installments.pull(installmentId);
+
+    const totalPaid = invoice.installments.reduce(
+      (sum, inst) => sum + (inst.status === "PAID" ? inst.amount : 0), 0
+    );
+    invoice.paidAmount = totalPaid;
+    invoice.remainingAmount = Math.max(0, getNetAmount(invoice) - totalPaid);
+    invoice.status =
+      invoice.remainingAmount === 0 && totalPaid > 0 ? "PAID"
+        : totalPaid > 0 ? "PARTIAL"
+          : "PENDING";
+
+    await invoice.save();
+
+    await logAudit({
+      req,
+      action: "INSTALLMENT_DELETED",
+      module: "finance",
+      targetId: invoice._id,
+      before,
+      after: invoice.toObject(),
+    });
+
+    res.json({ success: true, message: "Installment deleted", data: invoice });
+  } catch (err) {
+    console.error("deleteInstallment error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // controllers/invoiceController.js
 // exports.sendReceivingReportEmail = async (req, res) => {

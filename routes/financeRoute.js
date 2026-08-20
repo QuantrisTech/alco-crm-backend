@@ -12,6 +12,7 @@ const {
   markInstallmentPaid,
   editPaidInstallment,
   updateInstallment,
+  deleteInstallment,
   addInstallment,
   updateInvoice,
   sendInvoiceEmail,
@@ -107,6 +108,12 @@ router.patch(
   "/invoices/:invoiceId/installments/:installmentId",
   protect, authorize("admin", "super_admin", "finance_manager"),
   updateInstallment
+);
+
+router.delete(
+  "/invoices/:invoiceId/installments/:installmentId",
+  protect, authorize("admin", "super_admin", "finance_manager"),
+  deleteInstallment
 );
 
 router.post(
