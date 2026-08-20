@@ -434,7 +434,7 @@ exports.createUser = async (req, res) => {
     }
 
     // ✅ Role validation
-    const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "instructor", "finance_manager", "user"];
+    const allowedRoles = ["super_admin", "admin", "sales_manager", "sales_rep", "support", "instructor", "finance_manager", "user", "seo"];
     if (role && !allowedRoles.includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
