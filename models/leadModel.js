@@ -70,7 +70,7 @@ const leadSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["new", "contacted", "qualified", "call_booked", "interested", "converted", "lost"],
+      enum: ["new", "contacted", "qualified", "call_booked", "interested", "converted", "lost", "not_now"],
       default: "new",
     },
 
@@ -225,7 +225,8 @@ const leadSchema = new mongoose.Schema(
 
     lost_reason: String,
     lost_notes: String,
-    notes: String,
+    not_now_reason: String,
+    not_now_notes: String,
 
     // 🔥 Marketing tracking
     utm_source: String,

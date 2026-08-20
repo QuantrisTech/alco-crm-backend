@@ -2438,6 +2438,50 @@ exports.setLeadToLost = async (req, res) => {
     }
 };
 
+// NOT NOW LEAD
+exports.setLeadToNotNow = async (req, res) => {
+    try {
+        const { not_now_reason, not_now_notes } = req.body;
+
+        const lead = await Lead.findByIdAndUpdate(
+            req.params.id,
+            { status: "not_now", not_now_reason, not_now_notes },
+            { new: true }
+        );
+
+        if (!lead) return res.status(404).json({ message: "Lead not found" });
+
+        if (lead.user_id) {
+            await notifyStatusChanged({
+                userId: lead.user_id.toString(),
+                leadName: `${lead.first_name} ${lead.last_name}`,
+                leadId: lead._id.toString(),
+                newStatus: "not_now",
+                changedBy: req.user?._id?.toString(),
+            });
+
+            const user = await User.findById(lead.user_id).select("email name");
+            if (user?.email) {
+                await sendEmailDynamic({
+                    to: user.email,
+                    subject: "Update Regarding Your Request",
+                    templateName: "lead-not-now", // 👈 naya template banana hoga (ya lead-lost hi reuse kar lo)
+                    replacements: {
+                        UserName: user.name || lead.first_name,
+                        NotNowReason: not_now_reason || "Not specified",
+                        SupportEmail: "alco@support.com",
+                        YourCompanyName: "Al-and-co",
+                    },
+                });
+            }
+        }
+
+        res.status(200).json({ success: true, data: lead });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // GET ACTIVITIES
 exports.getActivities = async (req, res) => {
     try {

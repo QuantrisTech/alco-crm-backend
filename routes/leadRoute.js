@@ -15,6 +15,7 @@ const {
   assignLead,
   convertLead,
   setLeadToLost,
+  setLeadToNotNow,
   getActivities,
   addActivity,
   getLeadsStats,
@@ -51,7 +52,7 @@ router.patch("/:id/contract-edit", protect, authorize("super_admin", "admin", "s
 
 
 // ✅ Get Leads 
-router.get("/", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep", "finance_manager"), getLeads);
+router.get("/", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep", "finance_manager", "seo"), getLeads);
 
 // ✅ Get Single Lead 
 router.get("/:id", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), getLeadById);
@@ -70,6 +71,8 @@ router.post("/:id/convert", protect, authorize("super_admin", "admin", "sales_ma
 
 // ✅ Mark Lost 
 router.post("/:id/mark-lost", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), setLeadToLost);
+
+router.patch("/:id/not-now", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), setLeadToNotNow);
 
 // ✅ Get Activities 
 router.get("/:id/activities", protect, authorize("super_admin", "admin", "sales_manager", "sales_rep"), getActivities);
