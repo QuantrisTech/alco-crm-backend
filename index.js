@@ -86,8 +86,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // ✅ Preflight (VERY IMPORTANT)
-app.options("*", cors(corsOptions)); // ✅ same config
-
+// app.options("*", cors(corsOptions)); // ✅ same config
+app.options(/.*/, cors(corsOptions));
 // ✅ Preflight (VERY IMPORTANT)
 // app.options("*", cors());
 
